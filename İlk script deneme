@@ -1,0 +1,3337 @@
+------------------------------------------------
+-- PREMIUM PLAYER PANEL V5
+-- BÖLÜM 1 / 5
+-- CORE UI SYSTEM
+------------------------------------------------
+
+
+local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
+local Lighting = game:GetService("Lighting")
+local UserInputService = game:GetService("UserInputService")
+
+
+local player = Players.LocalPlayer
+
+
+
+------------------------------------------------
+-- GUI
+------------------------------------------------
+
+
+local gui = Instance.new("ScreenGui")
+
+gui.Name = "PremiumPlayerPanelV5"
+
+gui.ResetOnSpawn = false
+
+gui.IgnoreGuiInset = true
+
+gui.Parent = player:WaitForChild("PlayerGui")
+
+
+
+
+
+------------------------------------------------
+-- SCALE SYSTEM
+------------------------------------------------
+
+
+local scale = Instance.new("UIScale")
+
+scale.Parent = gui
+
+
+
+local function updateScale()
+
+	local camera = workspace.CurrentCamera
+	
+	if not camera then return end
+
+
+	local width = camera.ViewportSize.X
+
+
+	if width < 600 then
+		
+		scale.Scale = 0.65
+		
+	elseif width < 1000 then
+		
+		scale.Scale = 0.85
+		
+	else
+		
+		scale.Scale = 1
+		
+	end
+
+end
+
+
+
+updateScale()
+
+
+
+workspace.CurrentCamera:GetPropertyChangedSignal(
+	"ViewportSize"
+):Connect(updateScale)
+
+
+
+
+
+------------------------------------------------
+-- BLUR
+------------------------------------------------
+
+
+local blur = Instance.new("BlurEffect")
+
+blur.Name = "PremiumV5Blur"
+
+blur.Size = 0
+
+blur.Enabled = true
+
+blur.Parent = Lighting
+
+
+
+
+
+------------------------------------------------
+-- OPEN GEAR BUTTON
+------------------------------------------------
+
+
+local openButton = Instance.new("ImageButton")
+
+
+openButton.Name = "SettingsButton"
+
+
+openButton.Size =
+UDim2.fromOffset(90,90)
+
+
+openButton.Position =
+UDim2.new(
+	0,
+	35,
+	0.5,
+	-45
+)
+
+
+
+openButton.BackgroundColor3 =
+Color3.fromRGB(10,20,60)
+
+
+openButton.Image =
+"rbxassetid://3926305904"
+
+
+
+openButton.ImageRectOffset =
+Vector2.new(964,324)
+
+
+
+openButton.ImageRectSize =
+Vector2.new(36,36)
+
+
+
+openButton.ImageColor3 =
+Color3.fromRGB(0,255,255)
+
+
+
+openButton.Parent = gui
+
+
+
+
+
+local buttonCorner =
+Instance.new("UICorner")
+
+
+buttonCorner.CornerRadius =
+UDim.new(1,0)
+
+
+buttonCorner.Parent =
+openButton
+
+
+
+
+
+local buttonStroke =
+Instance.new("UIStroke")
+
+
+buttonStroke.Color =
+Color3.fromRGB(0,255,255)
+
+
+buttonStroke.Thickness = 4
+
+
+buttonStroke.Parent =
+openButton
+
+
+
+
+
+local buttonGradient =
+Instance.new("UIGradient")
+
+
+buttonGradient.Color =
+ColorSequence.new({
+
+	ColorSequenceKeypoint.new(
+		0,
+		Color3.fromRGB(0,255,255)
+	),
+
+	ColorSequenceKeypoint.new(
+		1,
+		Color3.fromRGB(0,80,255)
+	)
+
+})
+
+
+buttonGradient.Parent =
+openButton
+
+
+
+
+
+------------------------------------------------
+-- BUTTON ANIMATION
+------------------------------------------------
+
+
+task.spawn(function()
+
+	while true do
+
+
+		TweenService:Create(
+
+			buttonStroke,
+
+			TweenInfo.new(1),
+
+			{
+				Thickness = 7
+			}
+
+		):Play()
+
+
+		task.wait(1)
+
+
+		TweenService:Create(
+
+			buttonStroke,
+
+			TweenInfo.new(1),
+
+			{
+				Thickness = 4
+			}
+
+		):Play()
+
+
+		task.wait(1)
+
+
+	end
+
+end)
+
+
+
+
+
+
+------------------------------------------------
+-- MAIN WINDOW
+------------------------------------------------
+
+
+local panel =
+Instance.new("Frame")
+
+
+
+panel.Name =
+"PremiumMainWindow"
+
+
+
+panel.Size =
+UDim2.fromOffset(900,700)
+
+
+
+panel.Position =
+UDim2.new(
+	0.5,
+	-450,
+	0.5,
+	-350
+)
+
+
+
+panel.Visible = false
+
+
+
+panel.BackgroundColor3 =
+Color3.fromRGB(8,15,45)
+
+
+
+panel.Parent = gui
+
+
+
+
+
+local corner =
+Instance.new("UICorner")
+
+
+corner.CornerRadius =
+UDim.new(0,35)
+
+
+corner.Parent =
+panel
+
+
+
+
+
+local stroke =
+Instance.new("UIStroke")
+
+
+stroke.Color =
+Color3.fromRGB(0,255,255)
+
+
+stroke.Thickness = 5
+
+
+stroke.Parent =
+panel
+
+
+
+
+
+local gradient =
+Instance.new("UIGradient")
+
+
+gradient.Color =
+ColorSequence.new({
+
+	ColorSequenceKeypoint.new(
+		0,
+		Color3.fromRGB(20,40,120)
+	),
+
+
+	ColorSequenceKeypoint.new(
+		1,
+		Color3.fromRGB(0,140,200)
+	)
+
+})
+
+
+gradient.Rotation = 45
+
+
+gradient.Parent =
+panel
+
+
+
+
+
+------------------------------------------------
+-- TITLE
+------------------------------------------------
+
+
+local title =
+Instance.new("TextLabel")
+
+
+title.Size =
+UDim2.new(
+	1,
+	0,
+	0,
+	80
+)
+
+
+title.BackgroundTransparency = 1
+
+
+title.Text =
+"⭐ PREMIUM PLAYER PANEL V5"
+
+
+title.Font =
+Enum.Font.GothamBlack
+
+
+title.TextScaled = true
+
+
+title.TextColor3 =
+Color3.fromRGB(0,255,255)
+
+
+title.Parent =
+panel
+
+
+
+
+
+------------------------------------------------
+-- CLOSE BUTTON
+------------------------------------------------
+
+
+local close =
+Instance.new("TextButton")
+
+
+close.Size =
+UDim2.fromOffset(55,55)
+
+
+close.Position =
+UDim2.new(
+	1,
+	-70,
+	0,
+	15
+)
+
+
+close.BackgroundColor3 =
+Color3.fromRGB(255,40,60)
+
+
+close.Text =
+"X"
+
+
+close.TextScaled = true
+
+
+close.Font =
+Enum.Font.GothamBlack
+
+
+close.TextColor3 =
+Color3.new(1,1,1)
+
+
+close.Parent =
+panel
+
+
+
+
+
+local closeCorner =
+Instance.new("UICorner")
+
+
+closeCorner.CornerRadius =
+UDim.new(1,0)
+
+
+closeCorner.Parent =
+close
+
+
+
+
+
+------------------------------------------------
+-- SCROLL AREA
+------------------------------------------------
+
+
+local scroll =
+Instance.new("ScrollingFrame")
+
+
+scroll.Name =
+"MainScroll"
+
+
+scroll.Size =
+UDim2.new(
+	1,
+	-40,
+	1,
+	-110
+)
+
+
+scroll.Position =
+UDim2.fromOffset(
+	20,
+	90
+)
+
+
+
+scroll.BackgroundTransparency = 1
+
+
+scroll.ScrollBarThickness = 8
+
+
+scroll.CanvasSize =
+UDim2.new(
+	0,
+	0,
+	0,
+	1600
+)
+
+
+scroll.Parent =
+panel
+
+
+
+
+
+
+------------------------------------------------
+-- DRAG SYSTEM
+------------------------------------------------
+
+
+local dragging = false
+
+local dragStart
+
+local startPos
+
+
+
+title.InputBegan:Connect(function(input)
+
+
+	if input.UserInputType ==
+	Enum.UserInputType.MouseButton1
+	or input.UserInputType ==
+	Enum.UserInputType.Touch then
+
+
+		dragging = true
+
+
+		dragStart =
+		input.Position
+
+
+		startPos =
+		panel.Position
+
+
+
+	end
+
+
+end)
+
+
+
+
+
+title.InputChanged:Connect(function(input)
+
+
+	if input.UserInputType ==
+	Enum.UserInputType.MouseMovement
+	or input.UserInputType ==
+	Enum.UserInputType.Touch then
+
+
+		input.Changed:Connect(function()
+
+
+			if dragging then
+
+
+				local delta =
+				input.Position - dragStart
+
+
+
+				panel.Position =
+				UDim2.new(
+
+					startPos.X.Scale,
+
+					startPos.X.Offset + delta.X,
+
+					startPos.Y.Scale,
+
+					startPos.Y.Offset + delta.Y
+
+				)
+
+
+			end
+
+
+		end)
+
+	end
+
+end)
+
+
+
+
+
+UserInputService.InputEnded:Connect(function(input)
+
+
+	if input.UserInputType ==
+	Enum.UserInputType.MouseButton1
+	or input.UserInputType ==
+	Enum.UserInputType.Touch then
+
+
+		dragging = false
+
+
+	end
+
+
+end)
+
+
+
+
+
+
+
+------------------------------------------------
+-- OPEN CLOSE
+------------------------------------------------
+
+
+local opened = false
+
+
+
+local function openPanel()
+
+
+	opened = true
+
+
+	panel.Visible = true
+
+
+	panel.Size =
+	UDim2.fromOffset(0,0)
+
+
+
+	TweenService:Create(
+
+		panel,
+
+		TweenInfo.new(
+			0.5,
+			Enum.EasingStyle.Back,
+			Enum.EasingDirection.Out
+		),
+
+		{
+			Size =
+			UDim2.fromOffset(900,700)
+		}
+
+	):Play()
+
+
+
+	TweenService:Create(
+
+		blur,
+
+		TweenInfo.new(.4),
+
+		{
+			Size = 20
+		}
+
+	):Play()
+
+
+end
+
+
+
+
+
+local function closePanel()
+
+
+	opened = false
+
+
+	TweenService:Create(
+
+		panel,
+
+		TweenInfo.new(.3),
+
+		{
+			Size =
+			UDim2.fromOffset(0,0)
+		}
+
+	):Play()
+
+
+
+	TweenService:Create(
+
+		blur,
+
+		TweenInfo.new(.3),
+
+		{
+			Size = 0
+		}
+
+	):Play()
+
+
+
+	task.wait(.3)
+
+
+	panel.Visible = false
+
+
+end
+
+
+
+
+
+openButton.MouseButton1Click:Connect(function()
+
+
+	if opened then
+		
+		closePanel()
+		
+	else
+		
+		openPanel()
+		
+	end
+
+
+end)
+
+
+
+close.MouseButton1Click:Connect(closePanel)
+
+
+
+
+
+print("⭐ Premium Player Panel V5 Bölüm 1 Aktif")
+------------------------------------------------
+-- PREMIUM PLAYER PANEL V5
+-- BÖLÜM 2 / 5
+-- PLAYER PROFILE SYSTEM
+------------------------------------------------
+
+
+------------------------------------------------
+-- PROFILE CARD
+------------------------------------------------
+
+
+local profileCard = Instance.new("Frame")
+
+
+profileCard.Name =
+"ProfileCard"
+
+
+profileCard.Size =
+UDim2.fromOffset(800,260)
+
+
+profileCard.Position =
+UDim2.fromOffset(40,30)
+
+
+profileCard.BackgroundColor3 =
+Color3.fromRGB(0,0,0)
+
+
+profileCard.BackgroundTransparency =
+0.35
+
+
+profileCard.Parent =
+scroll
+
+
+
+
+
+local profileCorner =
+Instance.new("UICorner")
+
+
+profileCorner.CornerRadius =
+UDim.new(0,30)
+
+
+profileCorner.Parent =
+profileCard
+
+
+
+
+
+local profileStroke =
+Instance.new("UIStroke")
+
+
+profileStroke.Color =
+Color3.fromRGB(0,255,255)
+
+
+profileStroke.Thickness = 4
+
+
+profileStroke.Parent =
+profileCard
+
+
+
+
+
+
+------------------------------------------------
+-- AVATAR
+------------------------------------------------
+
+
+local avatarFrame =
+Instance.new("Frame")
+
+
+
+avatarFrame.Size =
+UDim2.fromOffset(200,200)
+
+
+avatarFrame.Position =
+UDim2.fromOffset(30,30)
+
+
+avatarFrame.BackgroundColor3 =
+Color3.fromRGB(0,0,0)
+
+
+avatarFrame.BackgroundTransparency =
+0.3
+
+
+avatarFrame.Parent =
+profileCard
+
+
+
+
+
+local avatarCorner =
+Instance.new("UICorner")
+
+
+avatarCorner.CornerRadius =
+UDim.new(1,0)
+
+
+avatarCorner.Parent =
+avatarFrame
+
+
+
+
+
+local avatarStroke =
+Instance.new("UIStroke")
+
+
+avatarStroke.Color =
+Color3.fromRGB(0,255,255)
+
+
+avatarStroke.Thickness = 5
+
+
+avatarStroke.Parent =
+avatarFrame
+
+
+
+
+
+local avatar =
+Instance.new("ImageLabel")
+
+
+
+avatar.Size =
+UDim2.new(
+	1,
+	-10,
+	1,
+	-10
+)
+
+
+avatar.Position =
+UDim2.fromOffset(5,5)
+
+
+avatar.BackgroundTransparency = 1
+
+
+avatar.Parent =
+avatarFrame
+
+
+
+
+
+local success,image =
+pcall(function()
+
+
+	return Players:GetUserThumbnailAsync(
+
+		player.UserId,
+
+		Enum.ThumbnailType.HeadShot,
+
+		Enum.ThumbnailSize.Size180x180
+
+	)
+
+
+end)
+
+
+
+if success then
+
+	avatar.Image = image
+
+end
+
+
+
+
+
+local avatarRound =
+Instance.new("UICorner")
+
+
+avatarRound.CornerRadius =
+UDim.new(1,0)
+
+
+avatarRound.Parent =
+avatar
+
+
+
+
+
+------------------------------------------------
+-- PLAYER NAME
+------------------------------------------------
+
+
+local playerName =
+Instance.new("TextLabel")
+
+
+playerName.Size =
+UDim2.fromOffset(520,55)
+
+
+playerName.Position =
+UDim2.fromOffset(270,40)
+
+
+playerName.BackgroundTransparency = 1
+
+
+playerName.Text =
+player.Name
+
+
+playerName.TextScaled = true
+
+
+playerName.Font =
+Enum.Font.GothamBlack
+
+
+playerName.TextColor3 =
+Color3.fromRGB(255,255,255)
+
+
+playerName.TextXAlignment =
+Enum.TextXAlignment.Left
+
+
+playerName.Parent =
+profileCard
+
+
+
+
+
+------------------------------------------------
+-- DISPLAY NAME
+------------------------------------------------
+
+
+local displayName =
+Instance.new("TextLabel")
+
+
+displayName.Size =
+UDim2.fromOffset(520,45)
+
+
+displayName.Position =
+UDim2.fromOffset(270,95)
+
+
+displayName.BackgroundTransparency = 1
+
+
+displayName.Text =
+"@"..player.DisplayName
+
+
+displayName.TextScaled = true
+
+
+displayName.Font =
+Enum.Font.Gotham
+
+
+displayName.TextColor3 =
+Color3.fromRGB(150,220,255)
+
+
+displayName.TextXAlignment =
+Enum.TextXAlignment.Left
+
+
+displayName.Parent =
+profileCard
+
+
+
+
+
+------------------------------------------------
+-- USER ID BOX
+------------------------------------------------
+
+
+local idBox =
+Instance.new("Frame")
+
+
+
+idBox.Size =
+UDim2.fromOffset(500,55)
+
+
+
+idBox.Position =
+UDim2.fromOffset(270,150)
+
+
+
+idBox.BackgroundColor3 =
+Color3.fromRGB(20,30,70)
+
+
+
+idBox.Parent =
+profileCard
+
+
+
+
+
+local idCorner =
+Instance.new("UICorner")
+
+
+idCorner.CornerRadius =
+UDim.new(0,15)
+
+
+idCorner.Parent =
+idBox
+
+
+
+
+
+local idText =
+Instance.new("TextLabel")
+
+
+
+idText.Size =
+UDim2.new(1,0,1,0)
+
+
+idText.BackgroundTransparency = 1
+
+
+idText.Text =
+"🆔 USER ID : "..player.UserId
+
+
+idText.TextScaled = true
+
+
+idText.Font =
+Enum.Font.GothamBold
+
+
+idText.TextColor3 =
+Color3.fromRGB(255,255,255)
+
+
+idText.Parent =
+idBox
+
+
+
+
+
+
+------------------------------------------------
+-- GROUP SYSTEM
+------------------------------------------------
+
+
+local GROUP_ID = 14905199
+
+
+
+
+
+local groupCard =
+Instance.new("Frame")
+
+
+
+groupCard.Size =
+UDim2.fromOffset(800,150)
+
+
+
+groupCard.Position =
+UDim2.fromOffset(40,330)
+
+
+
+groupCard.BackgroundColor3 =
+Color3.fromRGB(0,0,0)
+
+
+
+groupCard.BackgroundTransparency =
+0.35
+
+
+
+groupCard.Parent =
+scroll
+
+
+
+
+
+
+local groupCorner =
+Instance.new("UICorner")
+
+
+groupCorner.CornerRadius =
+UDim.new(0,30)
+
+
+groupCorner.Parent =
+groupCard
+
+
+
+
+
+
+local groupStroke =
+Instance.new("UIStroke")
+
+
+groupStroke.Color =
+Color3.fromRGB(255,215,0)
+
+
+groupStroke.Thickness = 4
+
+
+groupStroke.Parent =
+groupCard
+
+
+
+
+
+
+local groupTitle =
+Instance.new("TextLabel")
+
+
+groupTitle.Size =
+UDim2.new(1,0,0,45)
+
+
+groupTitle.BackgroundTransparency = 1
+
+
+groupTitle.Text =
+"🏆 GROUP INFORMATION"
+
+
+groupTitle.TextScaled = true
+
+
+groupTitle.Font =
+Enum.Font.GothamBlack
+
+
+groupTitle.TextColor3 =
+Color3.fromRGB(255,215,0)
+
+
+groupTitle.Parent =
+groupCard
+
+
+
+
+
+local groupText =
+Instance.new("TextLabel")
+
+
+groupText.Size =
+UDim2.new(1,-30,0,70)
+
+
+groupText.Position =
+UDim2.fromOffset(15,60)
+
+
+groupText.BackgroundTransparency = 1
+
+
+groupText.TextScaled = true
+
+
+groupText.Font =
+Enum.Font.GothamBold
+
+
+groupText.TextColor3 =
+Color3.fromRGB(255,255,255)
+
+
+groupText.Parent =
+groupCard
+
+
+
+
+
+
+local function updateGroup()
+
+
+	local role = "Guest"
+
+
+	local success,result =
+	pcall(function()
+
+		return player:GetRoleInGroup(
+			GROUP_ID
+		)
+
+	end)
+
+
+
+	if success then
+
+		role = result
+
+	end
+
+
+
+
+
+	if role == "Guest" then
+
+
+		groupText.Text =
+		"❌ Grup Üyesi Değil\n🆔 ID : "..GROUP_ID
+
+
+
+	else
+
+
+		groupText.Text =
+		"⭐ Rütbe : "..role..
+		"\n🆔 Grup ID : "..GROUP_ID
+
+
+	end
+
+
+end
+
+
+
+
+
+updateGroup()
+
+
+
+task.spawn(function()
+
+
+	while true do
+
+
+		updateGroup()
+
+
+		task.wait(60)
+
+
+	end
+
+
+end)
+
+
+
+
+
+
+
+------------------------------------------------
+-- PROFILE GLOW
+------------------------------------------------
+
+
+local profileGradient =
+Instance.new("UIGradient")
+
+
+
+profileGradient.Color =
+ColorSequence.new({
+
+	ColorSequenceKeypoint.new(
+		0,
+		Color3.fromRGB(255,255,255)
+	),
+
+
+	ColorSequenceKeypoint.new(
+		0.5,
+		Color3.fromRGB(0,255,255)
+	),
+
+
+	ColorSequenceKeypoint.new(
+		1,
+		Color3.fromRGB(255,255,255)
+	)
+
+})
+
+
+
+profileGradient.Parent =
+profileStroke
+
+
+
+
+
+task.spawn(function()
+
+
+	while true do
+
+
+		for i=-1,1,.03 do
+
+
+			profileGradient.Offset =
+			Vector2.new(i,0)
+
+
+			task.wait(.03)
+
+
+		end
+
+
+	end
+
+
+end)
+
+
+
+
+
+print("⭐ Premium Player Panel V5 Bölüm 2 Aktif")
+------------------------------------------------
+-- PREMIUM PLAYER PANEL V5
+-- BÖLÜM 3 / 5
+-- LIVE PLAYER STATS SYSTEM
+------------------------------------------------
+
+
+local RunService = game:GetService("RunService")
+local Stats = game:GetService("Stats")
+
+
+
+
+------------------------------------------------
+-- LIVE STATUS CARD
+------------------------------------------------
+
+
+local statsCard = Instance.new("Frame")
+
+
+statsCard.Name =
+"LiveStatsCard"
+
+
+
+statsCard.Size =
+UDim2.fromOffset(800,250)
+
+
+
+statsCard.Position =
+UDim2.fromOffset(40,510)
+
+
+
+statsCard.BackgroundColor3 =
+Color3.fromRGB(0,0,0)
+
+
+
+statsCard.BackgroundTransparency =
+0.35
+
+
+
+statsCard.Parent =
+scroll
+
+
+
+
+
+local statsCorner =
+Instance.new("UICorner")
+
+
+
+statsCorner.CornerRadius =
+UDim.new(0,30)
+
+
+
+statsCorner.Parent =
+statsCard
+
+
+
+
+
+local statsStroke =
+Instance.new("UIStroke")
+
+
+
+statsStroke.Color =
+Color3.fromRGB(0,255,255)
+
+
+
+statsStroke.Thickness = 4
+
+
+
+statsStroke.Parent =
+statsCard
+
+
+
+
+
+
+------------------------------------------------
+-- TITLE
+------------------------------------------------
+
+
+local statsTitle =
+Instance.new("TextLabel")
+
+
+
+statsTitle.Size =
+UDim2.new(
+	1,
+	0,
+	0,
+	55
+)
+
+
+
+statsTitle.BackgroundTransparency = 1
+
+
+
+statsTitle.Text =
+"⚡ LIVE PLAYER STATUS"
+
+
+
+statsTitle.TextScaled = true
+
+
+
+statsTitle.Font =
+Enum.Font.GothamBlack
+
+
+
+statsTitle.TextColor3 =
+Color3.fromRGB(0,255,255)
+
+
+
+statsTitle.Parent =
+statsCard
+
+
+
+
+
+
+------------------------------------------------
+-- FPS SYSTEM
+------------------------------------------------
+
+
+local fps = 0
+
+local frames = 0
+
+local last = tick()
+
+
+
+RunService.RenderStepped:Connect(function()
+
+
+	frames += 1
+
+
+	if tick()-last >= 1 then
+
+
+		fps = frames
+
+
+		frames = 0
+
+
+		last = tick()
+
+
+	end
+
+
+end)
+
+
+
+
+
+
+------------------------------------------------
+-- PING SYSTEM
+------------------------------------------------
+
+
+local function getPing()
+
+
+	local success,value =
+	pcall(function()
+
+
+		return Stats
+		.Network
+		.ServerStatsItem
+		["Data Ping"]
+		:GetValue()
+
+
+	end)
+
+
+
+	if success then
+
+		return math.floor(value)
+
+	end
+
+
+	return 0
+
+
+end
+
+
+
+
+
+
+------------------------------------------------
+-- DEVICE SYSTEM
+------------------------------------------------
+
+
+local function getDevice()
+
+
+	if UserInputService.TouchEnabled
+	and not UserInputService.KeyboardEnabled then
+
+
+		return "📱 Mobile"
+
+
+	elseif UserInputService.GamepadEnabled then
+
+
+		return "🎮 Console"
+
+
+	else
+
+
+		return "💻 PC"
+
+
+	end
+
+
+end
+
+
+
+
+
+
+------------------------------------------------
+-- SERVER INFO
+------------------------------------------------
+
+
+local serverID =
+string.sub(
+	game.JobId,
+	1,
+	10
+)
+
+
+
+
+
+------------------------------------------------
+-- PLAY TIME
+------------------------------------------------
+
+
+local joinTime =
+os.time()
+
+
+
+
+
+
+------------------------------------------------
+-- TEXT
+------------------------------------------------
+
+
+local statsText =
+Instance.new("TextLabel")
+
+
+
+statsText.Size =
+UDim2.new(
+	1,
+	-50,
+	1,
+	-80
+)
+
+
+
+statsText.Position =
+UDim2.fromOffset(
+	25,
+	70
+)
+
+
+
+statsText.BackgroundTransparency = 1
+
+
+
+statsText.TextXAlignment =
+Enum.TextXAlignment.Left
+
+
+
+statsText.TextYAlignment =
+Enum.TextYAlignment.Top
+
+
+
+statsText.TextWrapped = true
+
+
+
+statsText.TextScaled = true
+
+
+
+statsText.Font =
+Enum.Font.GothamBold
+
+
+
+statsText.TextColor3 =
+Color3.fromRGB(255,255,255)
+
+
+
+statsText.Parent =
+statsCard
+
+
+
+
+
+
+------------------------------------------------
+-- UPDATE LOOP
+------------------------------------------------
+
+
+task.spawn(function()
+
+
+	while true do
+
+
+		local total =
+		os.time()-joinTime
+
+
+
+		local min =
+		math.floor(total/60)
+
+
+
+		local sec =
+		total%60
+
+
+
+
+
+		statsText.Text =
+
+
+		"🖥 FPS : "..fps
+
+
+		..
+
+		"\n📡 Ping : "..getPing().." ms"
+
+
+		..
+
+		"\n⏱ Play Time : "
+		..min.."m "
+		..sec.."s"
+
+
+
+		..
+
+		"\n"
+		..getDevice()
+
+
+
+		..
+
+		"\n🌐 Server : "
+		..serverID
+
+
+
+
+
+		task.wait(1)
+
+
+	end
+
+
+end)
+
+
+
+
+
+
+
+
+------------------------------------------------
+-- FPS COLOR STATUS
+------------------------------------------------
+
+
+task.spawn(function()
+
+
+	while true do
+
+
+		if fps >= 50 then
+
+
+			statsStroke.Color =
+			Color3.fromRGB(0,255,100)
+
+
+
+		elseif fps >= 30 then
+
+
+			statsStroke.Color =
+			Color3.fromRGB(255,220,0)
+
+
+
+		else
+
+
+			statsStroke.Color =
+			Color3.fromRGB(255,50,50)
+
+
+
+		end
+
+
+
+		task.wait(2)
+
+
+	end
+
+
+end)
+
+
+
+
+
+
+------------------------------------------------
+-- NEON ANIMATION
+------------------------------------------------
+
+
+local statGradient =
+Instance.new("UIGradient")
+
+
+
+statGradient.Color =
+ColorSequence.new({
+
+	ColorSequenceKeypoint.new(
+		0,
+		Color3.fromRGB(0,255,255)
+	),
+
+
+	ColorSequenceKeypoint.new(
+		0.5,
+		Color3.fromRGB(0,80,255)
+	),
+
+
+	ColorSequenceKeypoint.new(
+		1,
+		Color3.fromRGB(0,255,255)
+	)
+
+})
+
+
+
+statGradient.Parent =
+statsStroke
+
+
+
+
+
+task.spawn(function()
+
+
+	while true do
+
+
+		for i=-1,1,.03 do
+
+
+			statGradient.Offset =
+			Vector2.new(i,0)
+
+
+			task.wait(.03)
+
+
+		end
+
+
+	end
+
+
+end)
+
+
+
+
+
+print("⭐ Premium Player Panel V5 Bölüm 3 Aktif")
+------------------------------------------------
+-- PREMIUM PLAYER PANEL V5
+-- BÖLÜM 4 / 5
+-- COMBAT & BADGE SYSTEM
+------------------------------------------------
+
+
+------------------------------------------------
+-- COMBAT VALUES
+------------------------------------------------
+
+
+local kills = 0
+local deaths = 0
+local killStreak = 0
+
+
+
+
+
+
+------------------------------------------------
+-- CHARACTER DEATH TRACKER
+------------------------------------------------
+
+
+local function setupCharacter(character)
+
+
+	local humanoid =
+	character:WaitForChild("Humanoid")
+
+
+
+	humanoid.Died:Connect(function()
+
+
+		deaths += 1
+
+		killStreak = 0
+
+
+	end)
+
+
+end
+
+
+
+
+if player.Character then
+
+	setupCharacter(player.Character)
+
+end
+
+
+
+player.CharacterAdded:Connect(
+	setupCharacter
+)
+
+
+
+
+
+
+
+------------------------------------------------
+-- COMBAT CARD
+------------------------------------------------
+
+
+local combatCard =
+Instance.new("Frame")
+
+
+
+combatCard.Name =
+"CombatCard"
+
+
+
+combatCard.Size =
+UDim2.fromOffset(800,220)
+
+
+
+combatCard.Position =
+UDim2.fromOffset(40,800)
+
+
+
+combatCard.BackgroundColor3 =
+Color3.fromRGB(0,0,0)
+
+
+
+combatCard.BackgroundTransparency =
+0.35
+
+
+
+combatCard.Parent =
+scroll
+
+
+
+
+
+
+local combatCorner =
+Instance.new("UICorner")
+
+
+
+combatCorner.CornerRadius =
+UDim.new(0,30)
+
+
+
+combatCorner.Parent =
+combatCard
+
+
+
+
+
+local combatStroke =
+Instance.new("UIStroke")
+
+
+
+combatStroke.Color =
+Color3.fromRGB(255,80,80)
+
+
+
+combatStroke.Thickness = 4
+
+
+
+combatStroke.Parent =
+combatCard
+
+
+
+
+
+
+------------------------------------------------
+-- TITLE
+------------------------------------------------
+
+
+local combatTitle =
+Instance.new("TextLabel")
+
+
+
+combatTitle.Size =
+UDim2.new(
+	1,
+	0,
+	0,
+	55
+)
+
+
+
+combatTitle.BackgroundTransparency = 1
+
+
+
+combatTitle.Text =
+"⚔️ COMBAT STATISTICS"
+
+
+
+combatTitle.TextScaled = true
+
+
+
+combatTitle.Font =
+Enum.Font.GothamBlack
+
+
+
+combatTitle.TextColor3 =
+Color3.fromRGB(255,100,100)
+
+
+
+combatTitle.Parent =
+combatCard
+
+
+
+
+
+
+
+------------------------------------------------
+-- COMBAT TEXT
+------------------------------------------------
+
+
+local combatText =
+Instance.new("TextLabel")
+
+
+
+combatText.Size =
+UDim2.new(
+	1,
+	-50,
+	0,
+	130
+)
+
+
+
+combatText.Position =
+UDim2.fromOffset(
+	25,
+	70
+)
+
+
+
+combatText.BackgroundTransparency = 1
+
+
+
+combatText.TextScaled = true
+
+
+
+combatText.Font =
+Enum.Font.GothamBold
+
+
+
+combatText.TextColor3 =
+Color3.fromRGB(255,255,255)
+
+
+
+combatText.Parent =
+combatCard
+
+
+
+
+
+
+local function updateCombat()
+
+
+	local kd = 0
+
+
+
+	if deaths > 0 then
+
+
+		kd =
+		math.floor(
+			(kills/deaths)*100
+		)/100
+
+
+
+	else
+
+
+		kd = kills
+
+
+
+	end
+
+
+
+
+
+	combatText.Text =
+
+
+	"⚔️ Kills : "..kills
+
+
+	..
+
+	"\n☠️ Deaths : "..deaths
+
+
+	..
+
+	"\n📊 K/D : "..kd
+
+
+	..
+
+	"\n🔥 Kill Streak : "..killStreak
+
+
+
+end
+
+
+
+
+
+
+task.spawn(function()
+
+
+	while true do
+
+
+		updateCombat()
+
+
+		task.wait(1)
+
+
+	end
+
+
+end)
+
+
+
+
+
+
+
+------------------------------------------------
+-- PREMIUM BADGE CARD
+------------------------------------------------
+
+
+local badgeCard =
+Instance.new("Frame")
+
+
+
+badgeCard.Name =
+"BadgeCard"
+
+
+
+badgeCard.Size =
+UDim2.fromOffset(800,180)
+
+
+
+badgeCard.Position =
+UDim2.fromOffset(40,1050)
+
+
+
+badgeCard.BackgroundColor3 =
+Color3.fromRGB(0,0,0)
+
+
+
+badgeCard.BackgroundTransparency =
+0.35
+
+
+
+badgeCard.Parent =
+scroll
+
+
+
+
+
+local badgeCorner =
+Instance.new("UICorner")
+
+
+
+badgeCorner.CornerRadius =
+UDim.new(0,30)
+
+
+
+badgeCorner.Parent =
+badgeCard
+
+
+
+
+
+
+local badgeStroke =
+Instance.new("UIStroke")
+
+
+
+badgeStroke.Color =
+Color3.fromRGB(255,215,0)
+
+
+
+badgeStroke.Thickness = 4
+
+
+
+badgeStroke.Parent =
+badgeCard
+
+
+
+
+
+
+------------------------------------------------
+-- BADGE TEXT
+------------------------------------------------
+
+
+local badgeText =
+Instance.new("TextLabel")
+
+
+
+badgeText.Size =
+UDim2.new(
+	1,
+	-40,
+	1,
+	-40
+)
+
+
+
+badgeText.Position =
+UDim2.fromOffset(
+	20,
+	20
+)
+
+
+
+badgeText.BackgroundTransparency = 1
+
+
+
+badgeText.TextWrapped = true
+
+
+
+badgeText.TextScaled = true
+
+
+
+badgeText.Font =
+Enum.Font.GothamBlack
+
+
+
+badgeText.TextColor3 =
+Color3.fromRGB(255,215,0)
+
+
+
+badgeText.Text =
+
+"🏆 PLAYER BADGES\n\n💎 Premium Member\n⭐ Elite Player"
+
+
+
+badgeText.Parent =
+badgeCard
+
+
+
+
+
+
+------------------------------------------------
+-- PREMIUM STATUS
+------------------------------------------------
+
+
+local premiumText =
+Instance.new("TextLabel")
+
+
+
+premiumText.Size =
+UDim2.fromOffset(
+	600,
+	60
+)
+
+
+
+premiumText.Position =
+UDim2.fromOffset(
+	140,
+	1270
+)
+
+
+
+premiumText.BackgroundTransparency = 1
+
+
+
+premiumText.Text =
+"💎 PREMIUM STATUS : ACTIVE"
+
+
+
+premiumText.TextScaled = true
+
+
+
+premiumText.Font =
+Enum.Font.GothamBlack
+
+
+
+premiumText.TextColor3 =
+Color3.fromRGB(0,255,255)
+
+
+
+premiumText.Parent =
+scroll
+
+
+
+
+
+
+------------------------------------------------
+-- COMBAT NEON EFFECT
+------------------------------------------------
+
+
+task.spawn(function()
+
+
+	while true do
+
+
+		TweenService:Create(
+
+			combatStroke,
+
+			TweenInfo.new(1),
+
+			{
+				Color =
+				Color3.fromRGB(255,0,120)
+			}
+
+		):Play()
+
+
+
+		task.wait(1)
+
+
+
+		TweenService:Create(
+
+			combatStroke,
+
+			TweenInfo.new(1),
+
+			{
+				Color =
+				Color3.fromRGB(255,150,0)
+			}
+
+		):Play()
+
+
+
+		task.wait(1)
+
+
+	end
+
+
+end)
+
+
+
+
+
+
+
+------------------------------------------------
+-- BADGE SHINE
+------------------------------------------------
+
+
+local badgeGradient =
+Instance.new("UIGradient")
+
+
+
+badgeGradient.Color =
+ColorSequence.new({
+
+	ColorSequenceKeypoint.new(
+		0,
+		Color3.fromRGB(255,255,255)
+	),
+
+
+	ColorSequenceKeypoint.new(
+		0.5,
+		Color3.fromRGB(255,215,0)
+	),
+
+
+	ColorSequenceKeypoint.new(
+		1,
+		Color3.fromRGB(255,255,255)
+	)
+
+})
+
+
+
+badgeGradient.Parent =
+badgeStroke
+
+
+
+
+
+
+task.spawn(function()
+
+
+	while true do
+
+
+		for i=-1,1,.03 do
+
+
+			badgeGradient.Offset =
+			Vector2.new(i,0)
+
+
+			task.wait(.03)
+
+
+		end
+
+
+	end
+
+
+end)
+
+
+
+
+
+print("⭐ Premium Player Panel V5 Bölüm 4 Aktif")
+------------------------------------------------
+-- PREMIUM PLAYER PANEL V5
+-- BÖLÜM 5 / 5
+-- FINAL RANK & XP SYSTEM
+------------------------------------------------
+
+
+------------------------------------------------
+-- PLAYER PROGRESSION
+------------------------------------------------
+
+
+local level = 1
+
+local xp = 0
+
+local coins = 2500
+
+
+
+local function addXP(amount)
+
+
+	xp += amount
+
+
+
+	if xp >= 100 then
+
+
+		level += 1
+
+
+		xp -= 100
+
+
+	end
+
+
+end
+
+
+
+
+
+
+------------------------------------------------
+-- LEVEL CARD
+------------------------------------------------
+
+
+local levelCard =
+Instance.new("Frame")
+
+
+
+levelCard.Name =
+"LevelCard"
+
+
+
+levelCard.Size =
+UDim2.fromOffset(800,230)
+
+
+
+levelCard.Position =
+UDim2.fromOffset(40,1370)
+
+
+
+levelCard.BackgroundColor3 =
+Color3.fromRGB(0,0,0)
+
+
+
+levelCard.BackgroundTransparency =
+0.35
+
+
+
+levelCard.Parent =
+scroll
+
+
+
+
+
+
+local levelCorner =
+Instance.new("UICorner")
+
+
+
+levelCorner.CornerRadius =
+UDim.new(0,30)
+
+
+
+levelCorner.Parent =
+levelCard
+
+
+
+
+
+
+local levelStroke =
+Instance.new("UIStroke")
+
+
+
+levelStroke.Color =
+Color3.fromRGB(180,0,255)
+
+
+
+levelStroke.Thickness = 5
+
+
+
+levelStroke.Parent =
+levelCard
+
+
+
+
+
+
+------------------------------------------------
+-- TITLE
+------------------------------------------------
+
+
+local levelTitle =
+Instance.new("TextLabel")
+
+
+
+levelTitle.Size =
+UDim2.new(
+	1,
+	0,
+	0,
+	55
+)
+
+
+
+levelTitle.BackgroundTransparency = 1
+
+
+
+levelTitle.Text =
+"🌟 PLAYER PROGRESSION"
+
+
+
+levelTitle.TextScaled = true
+
+
+
+levelTitle.Font =
+Enum.Font.GothamBlack
+
+
+
+levelTitle.TextColor3 =
+Color3.fromRGB(200,100,255)
+
+
+
+levelTitle.Parent =
+levelCard
+
+
+
+
+
+
+
+------------------------------------------------
+-- LEVEL TEXT
+------------------------------------------------
+
+
+local levelText =
+Instance.new("TextLabel")
+
+
+
+levelText.Size =
+UDim2.new(
+	1,
+	-50,
+	0,
+	130
+)
+
+
+
+levelText.Position =
+UDim2.fromOffset(
+	25,
+	75
+)
+
+
+
+levelText.BackgroundTransparency = 1
+
+
+
+levelText.TextScaled = true
+
+
+
+levelText.Font =
+Enum.Font.GothamBold
+
+
+
+levelText.TextColor3 =
+Color3.fromRGB(255,255,255)
+
+
+
+levelText.Parent =
+levelCard
+
+
+
+
+
+
+local function updateLevel()
+
+
+	levelText.Text =
+
+
+	"🏅 Level : "..level
+
+
+	..
+
+	"\n⭐ XP : "..xp.."/100"
+
+
+	..
+
+	"\n💰 Coins : "..coins
+
+
+
+end
+
+
+
+
+
+task.spawn(function()
+
+
+	while true do
+
+
+		updateLevel()
+
+
+		task.wait(1)
+
+
+	end
+
+
+end)
+
+
+
+
+
+
+
+------------------------------------------------
+-- RANK SYSTEM
+------------------------------------------------
+
+
+local rankText =
+Instance.new("TextLabel")
+
+
+
+rankText.Size =
+UDim2.fromOffset(
+	800,
+	60
+)
+
+
+
+rankText.Position =
+UDim2.fromOffset(
+	40,
+	1620
+)
+
+
+
+rankText.BackgroundTransparency = 1
+
+
+
+rankText.TextScaled = true
+
+
+
+rankText.Font =
+Enum.Font.GothamBlack
+
+
+
+rankText.TextColor3 =
+Color3.fromRGB(255,215,0)
+
+
+
+rankText.Parent =
+scroll
+
+
+
+
+
+
+local function updateRank()
+
+
+	local rank =
+	"🥉 Bronze"
+
+
+
+	if level >= 10 then
+
+
+		rank =
+		"🥈 Silver"
+
+
+	end
+
+
+
+	if level >= 25 then
+
+
+		rank =
+		"🥇 Gold"
+
+
+	end
+
+
+
+	if level >= 50 then
+
+
+		rank =
+		"💎 Diamond"
+
+
+	end
+
+
+
+	if level >= 100 then
+
+
+		rank =
+		"👑 Legend"
+
+
+	end
+
+
+
+
+
+	rankText.Text =
+	"RANK : "..rank
+
+
+end
+
+
+
+
+
+task.spawn(function()
+
+
+	while true do
+
+
+		updateRank()
+
+
+		task.wait(5)
+
+
+	end
+
+
+end)
+
+
+
+
+
+
+
+------------------------------------------------
+-- ACHIEVEMENT
+------------------------------------------------
+
+
+local achievement =
+Instance.new("TextLabel")
+
+
+
+achievement.Size =
+UDim2.fromOffset(
+	800,
+	80
+)
+
+
+
+achievement.Position =
+UDim2.fromOffset(
+	40,
+	1710
+)
+
+
+
+achievement.BackgroundTransparency = 1
+
+
+
+achievement.TextScaled = true
+
+
+
+achievement.Font =
+Enum.Font.GothamBlack
+
+
+
+achievement.TextColor3 =
+Color3.fromRGB(255,255,0)
+
+
+
+achievement.Text =
+
+"🏆 ACHIEVEMENT : PREMIUM PLAYER"
+
+
+
+achievement.Parent =
+scroll
+
+
+
+
+
+
+
+------------------------------------------------
+-- UPDATE CANVAS SIZE
+------------------------------------------------
+
+
+scroll.CanvasSize =
+UDim2.new(
+	0,
+	0,
+	0,
+	1850
+)
+
+
+
+
+
+
+
+------------------------------------------------
+-- FINAL GRADIENT
+------------------------------------------------
+
+
+local finalGradient =
+Instance.new("UIGradient")
+
+
+
+finalGradient.Color =
+ColorSequence.new({
+
+	ColorSequenceKeypoint.new(
+		0,
+		Color3.fromRGB(255,0,255)
+	),
+
+
+	ColorSequenceKeypoint.new(
+		0.5,
+		Color3.fromRGB(0,255,255)
+	),
+
+
+	ColorSequenceKeypoint.new(
+		1,
+		Color3.fromRGB(255,0,255)
+	)
+
+})
+
+
+
+finalGradient.Parent =
+levelStroke
+
+
+
+
+
+
+task.spawn(function()
+
+
+	while true do
+
+
+		for i=-1,1,.03 do
+
+
+			finalGradient.Offset =
+			Vector2.new(i,0)
+
+
+			task.wait(.03)
+
+
+		end
+
+
+	end
+
+
+end)
+
+
+
+
+
+
+
+------------------------------------------------
+-- FINAL GLOW
+------------------------------------------------
+
+
+task.spawn(function()
+
+
+	while true do
+
+
+
+		TweenService:Create(
+
+			levelStroke,
+
+			TweenInfo.new(1),
+
+			{
+				Thickness = 8
+			}
+
+		):Play()
+
+
+
+		task.wait(1)
+
+
+
+		TweenService:Create(
+
+			levelStroke,
+
+			TweenInfo.new(1),
+
+			{
+				Thickness = 5
+			}
+
+		):Play()
+
+
+
+		task.wait(1)
+
+
+
+	end
+
+
+end)
+
+
+
+
+
+
+------------------------------------------------
+-- COMPLETE
+------------------------------------------------
+
+
+print("⭐ Premium Player Panel V5 TÜM BÖLÜMLER AKTİF")
+print("💎 FINAL PREMIUM SYSTEM LOADED")
+
