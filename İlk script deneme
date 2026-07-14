@@ -1,3337 +1,1574 @@
-------------------------------------------------
--- PREMIUM PLAYER PANEL V5
--- BÖLÜM 1 / 5
--- CORE UI SYSTEM
-------------------------------------------------
+--[[
+  PHANTOM RECON MK3 — FULL MILITARY EDITION (FIXED)
+  LocalScript -> StarterPlayer > StarterPlayerScripts
+  
+  DÜZELTMELER:
+  - Mobil desteği (ScrollingFrame, büyük butonlar, dokunma sürükle)
+  - Kapat/minimize butonu çalışıyor
+  - Fly (BodyVelocity + BodyGyro)
+  - Night Vision (Lighting efektleri)
+  - ESP (BillboardGui)
+  - Radar (RunService loop)
+  - Follow/Takip (Humanoid:MoveTo)
+  - Waypoint sistemi
+  - Infinite Jump
+  - Stealth
+  - Auto Sprint
+]]
 
-
-local Players = game:GetService("Players")
-local TweenService = game:GetService("TweenService")
+local Plrs     = game:GetService("Players")
+local Run      = game:GetService("RunService")
+local UIS      = game:GetService("UserInputService")
+local Tws      = game:GetService("TweenService")
+local SGui     = game:GetService("StarterGui")
 local Lighting = game:GetService("Lighting")
-local UserInputService = game:GetService("UserInputService")
+local Cam      = workspace.CurrentCamera
 
+local me = Plrs.LocalPlayer
+local char, hum, root
 
-local player = Players.LocalPlayer
+local isMobile = UIS.TouchEnabled and not UIS.KeyboardEnabled
 
+-- ══════════════════════════════════════════════
+--  CONFIG
+-- ══════════════════════════════════════════════
+local CFG = {
+    range=100, followDst=6, wpInterval=8,
+    enabled=true, march=false, autoWp=true, notifs=true,
+    nv=false, esp=false, fly=false, infiniteJump=false,
+    stealth=false, autoSprint=false, speed=16, theme="GHOST",
+}
 
+-- ══════════════════════════════════════════════
+--  TEMALAR
+-- ══════════════════════════════════════════════
+local THEMES = {
+    GHOST = {
+        bg=Color3.fromRGB(8,6,0),     card=Color3.fromRGB(14,10,2),
+        p1=Color3.fromRGB(255,178,0), p2=Color3.fromRGB(255,215,80),
+        dim=Color3.fromRGB(140,95,0), dimmer=Color3.fromRGB(50,35,0),
+        txt=Color3.fromRGB(255,235,170), sub=Color3.fromRGB(160,118,40),
+        grn=Color3.fromRGB(80,220,120), red=Color3.fromRGB(255,50,50),
+        bar=Color3.fromRGB(30,22,4),
+    },
+    STEEL = {
+        bg=Color3.fromRGB(4,8,16),    card=Color3.fromRGB(8,14,26),
+        p1=Color3.fromRGB(0,180,255), p2=Color3.fromRGB(80,220,255),
+        dim=Color3.fromRGB(0,90,140), dimmer=Color3.fromRGB(0,30,55),
+        txt=Color3.fromRGB(170,220,255), sub=Color3.fromRGB(80,130,180),
+        grn=Color3.fromRGB(0,220,140), red=Color3.fromRGB(255,50,60),
+        bar=Color3.fromRGB(6,14,28),
+    },
+    PHANTOM = {
+        bg=Color3.fromRGB(2,8,2),     card=Color3.fromRGB(4,12,4),
+        p1=Color3.fromRGB(0,255,65),  p2=Color3.fromRGB(80,255,130),
+        dim=Color3.fromRGB(0,130,35), dimmer=Color3.fromRGB(0,50,15),
+        txt=Color3.fromRGB(190,255,200), sub=Color3.fromRGB(0,160,45),
+        grn=Color3.fromRGB(0,255,65), red=Color3.fromRGB(255,40,40),
+        bar=Color3.fromRGB(3,10,3),
+    },
+}
+local function C() return THEMES[CFG.theme] end
 
-------------------------------------------------
--- GUI
-------------------------------------------------
+-- ══════════════════════════════════════════════
+--  STATE
+-- ══════════════════════════════════════════════
+local target=nil
+local following=false
+local wps={}
+local wpCount=0
+local nearbyPlrs={}
+local logLines={}
+local t0=tick()
+local lastWpPos=nil
+local sweepAngle=0
+local blink=false
+local jjRunning=false
+local jjTarget=0
+local jjCount=0
+local jjTimer=0
+local espBillboards={}
+local flyActive=false
+local flyBV=nil
+local flyBG=nil
+local origTrans={}
+local minimized=false
+local guiOpen=true
 
+-- ══════════════════════════════════════════════
+--  CHARACTER SETUP
+-- ══════════════════════════════════════════════
+local function gc()
+    char = me.Character or me.CharacterAdded:Wait()
+    hum  = char:WaitForChild("Humanoid", 10)
+    root = char:WaitForChild("HumanoidRootPart", 10)
+end
+gc()
 
-local gui = Instance.new("ScreenGui")
+me.CharacterAdded:Connect(function(c)
+    char=c
+    hum=c:WaitForChild("Humanoid",10)
+    root=c:WaitForChild("HumanoidRootPart",10)
 
-gui.Name = "PremiumPlayerPanelV5"
+    -- Fly sıfırla
+    flyActive=false
+    flyBV=nil
+    flyBG=nil
 
-gui.ResetOnSpawn = false
+    -- Stealth yeniden uygula
+    task.delay(1.5, function()
+        if CFG.stealth and char then
+            for _,p in ipairs(char:GetDescendants()) do
+                if p:IsA("BasePart") and p.Name~="HumanoidRootPart" then
+                    p.Transparency=0.75
+                end
+            end
+        end
+    end)
 
-gui.IgnoreGuiInset = true
+    -- Hız yeniden uygula
+    task.delay(0.5, function()
+        if hum then hum.WalkSpeed=CFG.speed end
+    end)
+end)
 
-gui.Parent = player:WaitForChild("PlayerGui")
+print("[PHANTOM MK3] Baslatiliyor...")
 
-
-
-
-
-------------------------------------------------
--- SCALE SYSTEM
-------------------------------------------------
-
-
-local scale = Instance.new("UIScale")
-
-scale.Parent = gui
-
-
-
-local function updateScale()
-
-	local camera = workspace.CurrentCamera
-	
-	if not camera then return end
-
-
-	local width = camera.ViewportSize.X
-
-
-	if width < 600 then
-		
-		scale.Scale = 0.65
-		
-	elseif width < 1000 then
-		
-		scale.Scale = 0.85
-		
-	else
-		
-		scale.Scale = 1
-		
-	end
-
+-- ══════════════════════════════════════════════
+--  YARDIMCI FONKSİYONLAR
+-- ══════════════════════════════════════════════
+local function tw(o,p,t)
+    Tws:Create(o,TweenInfo.new(t or .2,Enum.EasingStyle.Quart),p):Play()
 end
 
-
-
-updateScale()
-
-
-
-workspace.CurrentCamera:GetPropertyChangedSignal(
-	"ViewportSize"
-):Connect(updateScale)
-
-
-
-
-
-------------------------------------------------
--- BLUR
-------------------------------------------------
-
-
-local blur = Instance.new("BlurEffect")
-
-blur.Name = "PremiumV5Blur"
-
-blur.Size = 0
-
-blur.Enabled = true
-
-blur.Parent = Lighting
-
-
-
-
-
-------------------------------------------------
--- OPEN GEAR BUTTON
-------------------------------------------------
-
-
-local openButton = Instance.new("ImageButton")
-
-
-openButton.Name = "SettingsButton"
-
-
-openButton.Size =
-UDim2.fromOffset(90,90)
-
-
-openButton.Position =
-UDim2.new(
-	0,
-	35,
-	0.5,
-	-45
-)
-
-
-
-openButton.BackgroundColor3 =
-Color3.fromRGB(10,20,60)
-
-
-openButton.Image =
-"rbxassetid://3926305904"
-
-
-
-openButton.ImageRectOffset =
-Vector2.new(964,324)
-
-
-
-openButton.ImageRectSize =
-Vector2.new(36,36)
-
-
-
-openButton.ImageColor3 =
-Color3.fromRGB(0,255,255)
-
-
-
-openButton.Parent = gui
-
-
-
-
-
-local buttonCorner =
-Instance.new("UICorner")
-
-
-buttonCorner.CornerRadius =
-UDim.new(1,0)
-
-
-buttonCorner.Parent =
-openButton
-
-
-
-
-
-local buttonStroke =
-Instance.new("UIStroke")
-
-
-buttonStroke.Color =
-Color3.fromRGB(0,255,255)
-
-
-buttonStroke.Thickness = 4
-
-
-buttonStroke.Parent =
-openButton
-
-
-
-
-
-local buttonGradient =
-Instance.new("UIGradient")
-
-
-buttonGradient.Color =
-ColorSequence.new({
-
-	ColorSequenceKeypoint.new(
-		0,
-		Color3.fromRGB(0,255,255)
-	),
-
-	ColorSequenceKeypoint.new(
-		1,
-		Color3.fromRGB(0,80,255)
-	)
-
-})
-
-
-buttonGradient.Parent =
-openButton
-
-
-
-
-
-------------------------------------------------
--- BUTTON ANIMATION
-------------------------------------------------
-
-
-task.spawn(function()
-
-	while true do
-
-
-		TweenService:Create(
-
-			buttonStroke,
-
-			TweenInfo.new(1),
-
-			{
-				Thickness = 7
-			}
-
-		):Play()
-
-
-		task.wait(1)
-
-
-		TweenService:Create(
-
-			buttonStroke,
-
-			TweenInfo.new(1),
-
-			{
-				Thickness = 4
-			}
-
-		):Play()
-
-
-		task.wait(1)
-
-
-	end
-
-end)
-
-
-
-
-
-
-------------------------------------------------
--- MAIN WINDOW
-------------------------------------------------
-
-
-local panel =
-Instance.new("Frame")
-
-
-
-panel.Name =
-"PremiumMainWindow"
-
-
-
-panel.Size =
-UDim2.fromOffset(900,700)
-
-
-
-panel.Position =
-UDim2.new(
-	0.5,
-	-450,
-	0.5,
-	-350
-)
-
-
-
-panel.Visible = false
-
-
-
-panel.BackgroundColor3 =
-Color3.fromRGB(8,15,45)
-
-
-
-panel.Parent = gui
-
-
-
-
-
-local corner =
-Instance.new("UICorner")
-
-
-corner.CornerRadius =
-UDim.new(0,35)
-
-
-corner.Parent =
-panel
-
-
-
-
-
-local stroke =
-Instance.new("UIStroke")
-
-
-stroke.Color =
-Color3.fromRGB(0,255,255)
-
-
-stroke.Thickness = 5
-
-
-stroke.Parent =
-panel
-
-
-
-
-
-local gradient =
-Instance.new("UIGradient")
-
-
-gradient.Color =
-ColorSequence.new({
-
-	ColorSequenceKeypoint.new(
-		0,
-		Color3.fromRGB(20,40,120)
-	),
-
-
-	ColorSequenceKeypoint.new(
-		1,
-		Color3.fromRGB(0,140,200)
-	)
-
-})
-
-
-gradient.Rotation = 45
-
-
-gradient.Parent =
-panel
-
-
-
-
-
-------------------------------------------------
--- TITLE
-------------------------------------------------
-
-
-local title =
-Instance.new("TextLabel")
-
-
-title.Size =
-UDim2.new(
-	1,
-	0,
-	0,
-	80
-)
-
-
-title.BackgroundTransparency = 1
-
-
-title.Text =
-"⭐ PREMIUM PLAYER PANEL V5"
-
-
-title.Font =
-Enum.Font.GothamBlack
-
-
-title.TextScaled = true
-
-
-title.TextColor3 =
-Color3.fromRGB(0,255,255)
-
-
-title.Parent =
-panel
-
-
-
-
-
-------------------------------------------------
--- CLOSE BUTTON
-------------------------------------------------
-
-
-local close =
-Instance.new("TextButton")
-
-
-close.Size =
-UDim2.fromOffset(55,55)
-
-
-close.Position =
-UDim2.new(
-	1,
-	-70,
-	0,
-	15
-)
-
-
-close.BackgroundColor3 =
-Color3.fromRGB(255,40,60)
-
-
-close.Text =
-"X"
-
-
-close.TextScaled = true
-
-
-close.Font =
-Enum.Font.GothamBlack
-
-
-close.TextColor3 =
-Color3.new(1,1,1)
-
-
-close.Parent =
-panel
-
-
-
-
-
-local closeCorner =
-Instance.new("UICorner")
-
-
-closeCorner.CornerRadius =
-UDim.new(1,0)
-
-
-closeCorner.Parent =
-close
-
-
-
-
-
-------------------------------------------------
--- SCROLL AREA
-------------------------------------------------
-
-
-local scroll =
-Instance.new("ScrollingFrame")
-
-
-scroll.Name =
-"MainScroll"
-
-
-scroll.Size =
-UDim2.new(
-	1,
-	-40,
-	1,
-	-110
-)
-
-
-scroll.Position =
-UDim2.fromOffset(
-	20,
-	90
-)
-
-
-
-scroll.BackgroundTransparency = 1
-
-
-scroll.ScrollBarThickness = 8
-
-
-scroll.CanvasSize =
-UDim2.new(
-	0,
-	0,
-	0,
-	1600
-)
-
-
-scroll.Parent =
-panel
-
-
-
-
-
-
-------------------------------------------------
--- DRAG SYSTEM
-------------------------------------------------
-
-
-local dragging = false
-
-local dragStart
-
-local startPos
-
-
-
-title.InputBegan:Connect(function(input)
-
-
-	if input.UserInputType ==
-	Enum.UserInputType.MouseButton1
-	or input.UserInputType ==
-	Enum.UserInputType.Touch then
-
-
-		dragging = true
-
-
-		dragStart =
-		input.Position
-
-
-		startPos =
-		panel.Position
-
-
-
-	end
-
-
-end)
-
-
-
-
-
-title.InputChanged:Connect(function(input)
-
-
-	if input.UserInputType ==
-	Enum.UserInputType.MouseMovement
-	or input.UserInputType ==
-	Enum.UserInputType.Touch then
-
-
-		input.Changed:Connect(function()
-
-
-			if dragging then
-
-
-				local delta =
-				input.Position - dragStart
-
-
-
-				panel.Position =
-				UDim2.new(
-
-					startPos.X.Scale,
-
-					startPos.X.Offset + delta.X,
-
-					startPos.Y.Scale,
-
-					startPos.Y.Offset + delta.Y
-
-				)
-
-
-			end
-
-
-		end)
-
-	end
-
-end)
-
-
-
-
-
-UserInputService.InputEnded:Connect(function(input)
-
-
-	if input.UserInputType ==
-	Enum.UserInputType.MouseButton1
-	or input.UserInputType ==
-	Enum.UserInputType.Touch then
-
-
-		dragging = false
-
-
-	end
-
-
-end)
-
-
-
-
-
-
-
-------------------------------------------------
--- OPEN CLOSE
-------------------------------------------------
-
-
-local opened = false
-
-
-
-local function openPanel()
-
-
-	opened = true
-
-
-	panel.Visible = true
-
-
-	panel.Size =
-	UDim2.fromOffset(0,0)
-
-
-
-	TweenService:Create(
-
-		panel,
-
-		TweenInfo.new(
-			0.5,
-			Enum.EasingStyle.Back,
-			Enum.EasingDirection.Out
-		),
-
-		{
-			Size =
-			UDim2.fromOffset(900,700)
-		}
-
-	):Play()
-
-
-
-	TweenService:Create(
-
-		blur,
-
-		TweenInfo.new(.4),
-
-		{
-			Size = 20
-		}
-
-	):Play()
-
-
+local function ts()
+    local s=tick()-t0
+    return string.format("[%02d:%02d]",math.floor(s/60),s%60)
 end
 
-
-
-
-
-local function closePanel()
-
-
-	opened = false
-
-
-	TweenService:Create(
-
-		panel,
-
-		TweenInfo.new(.3),
-
-		{
-			Size =
-			UDim2.fromOffset(0,0)
-		}
-
-	):Play()
-
-
-
-	TweenService:Create(
-
-		blur,
-
-		TweenInfo.new(.3),
-
-		{
-			Size = 0
-		}
-
-	):Play()
-
-
-
-	task.wait(.3)
-
-
-	panel.Visible = false
-
-
+local function nfy(ti,bo,dur)
+    if CFG.notifs then
+        pcall(function()
+            SGui:SetCore("SendNotification",{Title=ti,Text=bo,Duration=dur or 3})
+        end)
+    end
 end
 
-
-
-
-
-openButton.MouseButton1Click:Connect(function()
-
-
-	if opened then
-		
-		closePanel()
-		
-	else
-		
-		openPanel()
-		
-	end
-
-
-end)
-
-
-
-close.MouseButton1Click:Connect(closePanel)
-
-
-
-
-
-print("⭐ Premium Player Panel V5 Bölüm 1 Aktif")
-------------------------------------------------
--- PREMIUM PLAYER PANEL V5
--- BÖLÜM 2 / 5
--- PLAYER PROFILE SYSTEM
-------------------------------------------------
-
-
-------------------------------------------------
--- PROFILE CARD
-------------------------------------------------
-
-
-local profileCard = Instance.new("Frame")
-
-
-profileCard.Name =
-"ProfileCard"
-
-
-profileCard.Size =
-UDim2.fromOffset(800,260)
-
-
-profileCard.Position =
-UDim2.fromOffset(40,30)
-
-
-profileCard.BackgroundColor3 =
-Color3.fromRGB(0,0,0)
-
-
-profileCard.BackgroundTransparency =
-0.35
-
-
-profileCard.Parent =
-scroll
-
-
-
-
-
-local profileCorner =
-Instance.new("UICorner")
-
-
-profileCorner.CornerRadius =
-UDim.new(0,30)
-
-
-profileCorner.Parent =
-profileCard
-
-
-
-
-
-local profileStroke =
-Instance.new("UIStroke")
-
-
-profileStroke.Color =
-Color3.fromRGB(0,255,255)
-
-
-profileStroke.Thickness = 4
-
-
-profileStroke.Parent =
-profileCard
-
-
-
-
-
-
-------------------------------------------------
--- AVATAR
-------------------------------------------------
-
-
-local avatarFrame =
-Instance.new("Frame")
-
-
-
-avatarFrame.Size =
-UDim2.fromOffset(200,200)
-
-
-avatarFrame.Position =
-UDim2.fromOffset(30,30)
-
-
-avatarFrame.BackgroundColor3 =
-Color3.fromRGB(0,0,0)
-
-
-avatarFrame.BackgroundTransparency =
-0.3
-
-
-avatarFrame.Parent =
-profileCard
-
-
-
-
-
-local avatarCorner =
-Instance.new("UICorner")
-
-
-avatarCorner.CornerRadius =
-UDim.new(1,0)
-
-
-avatarCorner.Parent =
-avatarFrame
-
-
-
-
-
-local avatarStroke =
-Instance.new("UIStroke")
-
-
-avatarStroke.Color =
-Color3.fromRGB(0,255,255)
-
-
-avatarStroke.Thickness = 5
-
-
-avatarStroke.Parent =
-avatarFrame
-
-
-
-
-
-local avatar =
-Instance.new("ImageLabel")
-
-
-
-avatar.Size =
-UDim2.new(
-	1,
-	-10,
-	1,
-	-10
-)
-
-
-avatar.Position =
-UDim2.fromOffset(5,5)
-
-
-avatar.BackgroundTransparency = 1
-
-
-avatar.Parent =
-avatarFrame
-
-
-
-
-
-local success,image =
-pcall(function()
-
-
-	return Players:GetUserThumbnailAsync(
-
-		player.UserId,
-
-		Enum.ThumbnailType.HeadShot,
-
-		Enum.ThumbnailSize.Size180x180
-
-	)
-
-
-end)
-
-
-
-if success then
-
-	avatar.Image = image
-
+local function alog(msg,col)
+    table.insert(logLines,1,{t=ts().." "..msg, c=col or C().sub})
+    if #logLines>30 then table.remove(logLines) end
 end
 
-
-
-
-
-local avatarRound =
-Instance.new("UICorner")
-
-
-avatarRound.CornerRadius =
-UDim.new(1,0)
-
-
-avatarRound.Parent =
-avatar
-
-
-
-
-
-------------------------------------------------
--- PLAYER NAME
-------------------------------------------------
-
-
-local playerName =
-Instance.new("TextLabel")
-
-
-playerName.Size =
-UDim2.fromOffset(520,55)
-
-
-playerName.Position =
-UDim2.fromOffset(270,40)
-
-
-playerName.BackgroundTransparency = 1
-
-
-playerName.Text =
-player.Name
-
-
-playerName.TextScaled = true
-
-
-playerName.Font =
-Enum.Font.GothamBlack
-
-
-playerName.TextColor3 =
-Color3.fromRGB(255,255,255)
-
-
-playerName.TextXAlignment =
-Enum.TextXAlignment.Left
-
-
-playerName.Parent =
-profileCard
-
-
-
-
-
-------------------------------------------------
--- DISPLAY NAME
-------------------------------------------------
-
-
-local displayName =
-Instance.new("TextLabel")
-
-
-displayName.Size =
-UDim2.fromOffset(520,45)
-
-
-displayName.Position =
-UDim2.fromOffset(270,95)
-
-
-displayName.BackgroundTransparency = 1
-
-
-displayName.Text =
-"@"..player.DisplayName
-
-
-displayName.TextScaled = true
-
-
-displayName.Font =
-Enum.Font.Gotham
-
-
-displayName.TextColor3 =
-Color3.fromRGB(150,220,255)
-
-
-displayName.TextXAlignment =
-Enum.TextXAlignment.Left
-
-
-displayName.Parent =
-profileCard
-
-
-
-
-
-------------------------------------------------
--- USER ID BOX
-------------------------------------------------
-
-
-local idBox =
-Instance.new("Frame")
-
-
-
-idBox.Size =
-UDim2.fromOffset(500,55)
-
-
-
-idBox.Position =
-UDim2.fromOffset(270,150)
-
-
-
-idBox.BackgroundColor3 =
-Color3.fromRGB(20,30,70)
-
-
-
-idBox.Parent =
-profileCard
-
-
-
-
-
-local idCorner =
-Instance.new("UICorner")
-
-
-idCorner.CornerRadius =
-UDim.new(0,15)
-
-
-idCorner.Parent =
-idBox
-
-
-
-
-
-local idText =
-Instance.new("TextLabel")
-
-
-
-idText.Size =
-UDim2.new(1,0,1,0)
-
-
-idText.BackgroundTransparency = 1
-
-
-idText.Text =
-"🆔 USER ID : "..player.UserId
-
-
-idText.TextScaled = true
-
-
-idText.Font =
-Enum.Font.GothamBold
-
-
-idText.TextColor3 =
-Color3.fromRGB(255,255,255)
-
-
-idText.Parent =
-idBox
-
-
-
-
-
-
-------------------------------------------------
--- GROUP SYSTEM
-------------------------------------------------
-
-
-local GROUP_ID = 14905199
-
-
-
-
-
-local groupCard =
-Instance.new("Frame")
-
-
-
-groupCard.Size =
-UDim2.fromOffset(800,150)
-
-
-
-groupCard.Position =
-UDim2.fromOffset(40,330)
-
-
-
-groupCard.BackgroundColor3 =
-Color3.fromRGB(0,0,0)
-
-
-
-groupCard.BackgroundTransparency =
-0.35
-
-
-
-groupCard.Parent =
-scroll
-
-
-
-
-
-
-local groupCorner =
-Instance.new("UICorner")
-
-
-groupCorner.CornerRadius =
-UDim.new(0,30)
-
-
-groupCorner.Parent =
-groupCard
-
-
-
-
-
-
-local groupStroke =
-Instance.new("UIStroke")
-
-
-groupStroke.Color =
-Color3.fromRGB(255,215,0)
-
-
-groupStroke.Thickness = 4
-
-
-groupStroke.Parent =
-groupCard
-
-
-
-
-
-
-local groupTitle =
-Instance.new("TextLabel")
-
-
-groupTitle.Size =
-UDim2.new(1,0,0,45)
-
-
-groupTitle.BackgroundTransparency = 1
-
-
-groupTitle.Text =
-"🏆 GROUP INFORMATION"
-
-
-groupTitle.TextScaled = true
-
-
-groupTitle.Font =
-Enum.Font.GothamBlack
-
-
-groupTitle.TextColor3 =
-Color3.fromRGB(255,215,0)
-
-
-groupTitle.Parent =
-groupCard
-
-
-
-
-
-local groupText =
-Instance.new("TextLabel")
-
-
-groupText.Size =
-UDim2.new(1,-30,0,70)
-
-
-groupText.Position =
-UDim2.fromOffset(15,60)
-
-
-groupText.BackgroundTransparency = 1
-
-
-groupText.TextScaled = true
-
-
-groupText.Font =
-Enum.Font.GothamBold
-
-
-groupText.TextColor3 =
-Color3.fromRGB(255,255,255)
-
-
-groupText.Parent =
-groupCard
-
-
-
-
-
-
-local function updateGroup()
-
-
-	local role = "Guest"
-
-
-	local success,result =
-	pcall(function()
-
-		return player:GetRoleInGroup(
-			GROUP_ID
-		)
-
-	end)
-
-
-
-	if success then
-
-		role = result
-
-	end
-
-
-
-
-
-	if role == "Guest" then
-
-
-		groupText.Text =
-		"❌ Grup Üyesi Değil\n🆔 ID : "..GROUP_ID
-
-
-
-	else
-
-
-		groupText.Text =
-		"⭐ Rütbe : "..role..
-		"\n🆔 Grup ID : "..GROUP_ID
-
-
-	end
-
-
+local function getBearing(f,t2)
+    if not f or not t2 then return "---" end
+    local dx=t2.X-f.X; local dz=t2.Z-f.Z
+    local a=math.deg(math.atan2(dx,dz))
+    if a<0 then a=a+360 end
+    local dirs={"N","NNE","NE","ENE","E","ESE","SE","SSE","S","SSW","SW","WSW","W","WNW","NW","NNW"}
+    return dirs[math.floor(((a+11.25)/22.5)%16)+1]
 end
 
-
-
-
-
-updateGroup()
-
-
-
-task.spawn(function()
-
-
-	while true do
-
-
-		updateGroup()
-
-
-		task.wait(60)
-
-
-	end
-
-
-end)
-
-
-
-
-
-
-
-------------------------------------------------
--- PROFILE GLOW
-------------------------------------------------
-
-
-local profileGradient =
-Instance.new("UIGradient")
-
-
-
-profileGradient.Color =
-ColorSequence.new({
-
-	ColorSequenceKeypoint.new(
-		0,
-		Color3.fromRGB(255,255,255)
-	),
-
-
-	ColorSequenceKeypoint.new(
-		0.5,
-		Color3.fromRGB(0,255,255)
-	),
-
-
-	ColorSequenceKeypoint.new(
-		1,
-		Color3.fromRGB(255,255,255)
-	)
-
-})
-
-
-
-profileGradient.Parent =
-profileStroke
-
-
-
-
-
-task.spawn(function()
-
-
-	while true do
-
-
-		for i=-1,1,.03 do
-
-
-			profileGradient.Offset =
-			Vector2.new(i,0)
-
-
-			task.wait(.03)
-
-
-		end
-
-
-	end
-
-
-end)
-
-
-
-
-
-print("⭐ Premium Player Panel V5 Bölüm 2 Aktif")
-------------------------------------------------
--- PREMIUM PLAYER PANEL V5
--- BÖLÜM 3 / 5
--- LIVE PLAYER STATS SYSTEM
-------------------------------------------------
-
-
-local RunService = game:GetService("RunService")
-local Stats = game:GetService("Stats")
-
-
-
-
-------------------------------------------------
--- LIVE STATUS CARD
-------------------------------------------------
-
-
-local statsCard = Instance.new("Frame")
-
-
-statsCard.Name =
-"LiveStatsCard"
-
-
-
-statsCard.Size =
-UDim2.fromOffset(800,250)
-
-
-
-statsCard.Position =
-UDim2.fromOffset(40,510)
-
-
-
-statsCard.BackgroundColor3 =
-Color3.fromRGB(0,0,0)
-
-
-
-statsCard.BackgroundTransparency =
-0.35
-
-
-
-statsCard.Parent =
-scroll
-
-
-
-
-
-local statsCorner =
-Instance.new("UICorner")
-
-
-
-statsCorner.CornerRadius =
-UDim.new(0,30)
-
-
-
-statsCorner.Parent =
-statsCard
-
-
-
-
-
-local statsStroke =
-Instance.new("UIStroke")
-
-
-
-statsStroke.Color =
-Color3.fromRGB(0,255,255)
-
-
-
-statsStroke.Thickness = 4
-
-
-
-statsStroke.Parent =
-statsCard
-
-
-
-
-
-
-------------------------------------------------
--- TITLE
-------------------------------------------------
-
-
-local statsTitle =
-Instance.new("TextLabel")
-
-
-
-statsTitle.Size =
-UDim2.new(
-	1,
-	0,
-	0,
-	55
-)
-
-
-
-statsTitle.BackgroundTransparency = 1
-
-
-
-statsTitle.Text =
-"⚡ LIVE PLAYER STATUS"
-
-
-
-statsTitle.TextScaled = true
-
-
-
-statsTitle.Font =
-Enum.Font.GothamBlack
-
-
-
-statsTitle.TextColor3 =
-Color3.fromRGB(0,255,255)
-
-
-
-statsTitle.Parent =
-statsCard
-
-
-
-
-
-
-------------------------------------------------
--- FPS SYSTEM
-------------------------------------------------
-
-
-local fps = 0
-
-local frames = 0
-
-local last = tick()
-
-
-
-RunService.RenderStepped:Connect(function()
-
-
-	frames += 1
-
-
-	if tick()-last >= 1 then
-
-
-		fps = frames
-
-
-		frames = 0
-
-
-		last = tick()
-
-
-	end
-
-
-end)
-
-
-
-
-
-
-------------------------------------------------
--- PING SYSTEM
-------------------------------------------------
-
-
-local function getPing()
-
-
-	local success,value =
-	pcall(function()
-
-
-		return Stats
-		.Network
-		.ServerStatsItem
-		["Data Ping"]
-		:GetValue()
-
-
-	end)
-
-
-
-	if success then
-
-		return math.floor(value)
-
-	end
-
-
-	return 0
-
-
+local function scanNearby()
+    nearbyPlrs={}
+    if not root then return end
+    for _,plr in ipairs(Plrs:GetPlayers()) do
+        if plr~=me and plr.Character then
+            local pr=plr.Character:FindFirstChild("HumanoidRootPart")
+            if pr then
+                local d=(root.Position-pr.Position).Magnitude
+                if d<=CFG.range then
+                    local hm2=plr.Character:FindFirstChild("Humanoid")
+                    table.insert(nearbyPlrs,{
+                        plr=plr, dist=math.floor(d), pos=pr.Position,
+                        hp=hm2 and math.floor((hm2.Health/math.max(hm2.MaxHealth,1))*100) or 100,
+                        threat=d<30 and "HIGH" or d<60 and "MED" or "LOW",
+                    })
+                end
+            end
+        end
+    end
+    table.sort(nearbyPlrs, function(a,b) return a.dist<b.dist end)
 end
 
+-- ══════════════════════════════════════════════
+--  FLY SİSTEMİ (DÜZELTİLDİ)
+-- ══════════════════════════════════════════════
+local flySpeed = 40
+local flyConn = nil
 
+local function enableFly()
+    if not root or flyActive then return end
+    flyActive = true
 
+    -- Eski bileşenleri temizle
+    local oldBV = root:FindFirstChild("PhantomFlyBV")
+    local oldBG = root:FindFirstChild("PhantomFlyBG")
+    if oldBV then oldBV:Destroy() end
+    if oldBG then oldBG:Destroy() end
 
+    flyBV = Instance.new("BodyVelocity")
+    flyBV.Name = "PhantomFlyBV"
+    flyBV.Velocity = Vector3.zero
+    flyBV.MaxForce = Vector3.new(1e5,1e5,1e5)
+    flyBV.Parent = root
 
+    flyBG = Instance.new("BodyGyro")
+    flyBG.Name = "PhantomFlyBG"
+    flyBG.MaxTorque = Vector3.new(1e5,1e5,1e5)
+    flyBG.D = 50
+    flyBG.CFrame = root.CFrame
+    flyBG.Parent = root
 
-------------------------------------------------
--- DEVICE SYSTEM
-------------------------------------------------
+    if hum then
+        hum.PlatformStand = true
+    end
 
+    flyConn = Run.RenderStepped:Connect(function()
+        if not flyActive or not root then return end
+        if not flyBV or not flyBV.Parent then return end
 
-local function getDevice()
+        local camCF = Cam.CFrame
+        local dir = Vector3.zero
 
+        -- WASD / Mobile için kamera yönü kullan
+        local moveDir = Vector3.zero
+        if UIS:IsKeyDown(Enum.KeyCode.W) then moveDir = moveDir + camCF.LookVector end
+        if UIS:IsKeyDown(Enum.KeyCode.S) then moveDir = moveDir - camCF.LookVector end
+        if UIS:IsKeyDown(Enum.KeyCode.A) then moveDir = moveDir - camCF.RightVector end
+        if UIS:IsKeyDown(Enum.KeyCode.D) then moveDir = moveDir + camCF.RightVector end
+        if UIS:IsKeyDown(Enum.KeyCode.Space) or UIS:IsKeyDown(Enum.KeyCode.E) then
+            moveDir = moveDir + Vector3.new(0,1,0)
+        end
+        if UIS:IsKeyDown(Enum.KeyCode.LeftControl) or UIS:IsKeyDown(Enum.KeyCode.Q) then
+            moveDir = moveDir - Vector3.new(0,1,0)
+        end
 
-	if UserInputService.TouchEnabled
-	and not UserInputService.KeyboardEnabled then
+        -- Mobil: Humanoid MoveDirection kullan
+        if isMobile and hum then
+            local md = hum.MoveDirection
+            if md.Magnitude > 0.1 then
+                moveDir = md + Vector3.new(0, moveDir.Y, 0)
+            end
+        end
 
+        if moveDir.Magnitude > 0 then
+            moveDir = moveDir.Unit
+        end
 
-		return "📱 Mobile"
+        flyBV.Velocity = moveDir * flySpeed
+        flyBG.CFrame = camCF
+    end)
 
-
-	elseif UserInputService.GamepadEnabled then
-
-
-		return "🎮 Console"
-
-
-	else
-
-
-		return "💻 PC"
-
-
-	end
-
-
+    nfy("FLY","Uçuş aktif",2)
+    alog("FLY AKTIF",C().p2)
 end
 
-
-
-
-
-
-------------------------------------------------
--- SERVER INFO
-------------------------------------------------
-
-
-local serverID =
-string.sub(
-	game.JobId,
-	1,
-	10
-)
-
-
-
-
-
-------------------------------------------------
--- PLAY TIME
-------------------------------------------------
-
-
-local joinTime =
-os.time()
-
-
-
-
-
-
-------------------------------------------------
--- TEXT
-------------------------------------------------
-
-
-local statsText =
-Instance.new("TextLabel")
-
-
-
-statsText.Size =
-UDim2.new(
-	1,
-	-50,
-	1,
-	-80
-)
-
-
-
-statsText.Position =
-UDim2.fromOffset(
-	25,
-	70
-)
-
-
-
-statsText.BackgroundTransparency = 1
-
-
-
-statsText.TextXAlignment =
-Enum.TextXAlignment.Left
-
-
-
-statsText.TextYAlignment =
-Enum.TextYAlignment.Top
-
-
-
-statsText.TextWrapped = true
-
-
-
-statsText.TextScaled = true
-
-
-
-statsText.Font =
-Enum.Font.GothamBold
-
-
-
-statsText.TextColor3 =
-Color3.fromRGB(255,255,255)
-
-
-
-statsText.Parent =
-statsCard
-
-
-
-
-
-
-------------------------------------------------
--- UPDATE LOOP
-------------------------------------------------
-
-
-task.spawn(function()
-
-
-	while true do
-
-
-		local total =
-		os.time()-joinTime
-
-
-
-		local min =
-		math.floor(total/60)
-
-
-
-		local sec =
-		total%60
-
-
-
-
-
-		statsText.Text =
-
-
-		"🖥 FPS : "..fps
-
-
-		..
-
-		"\n📡 Ping : "..getPing().." ms"
-
-
-		..
-
-		"\n⏱ Play Time : "
-		..min.."m "
-		..sec.."s"
-
-
-
-		..
-
-		"\n"
-		..getDevice()
-
-
-
-		..
-
-		"\n🌐 Server : "
-		..serverID
-
-
-
-
-
-		task.wait(1)
-
-
-	end
-
-
-end)
-
-
-
-
-
-
-
-
-------------------------------------------------
--- FPS COLOR STATUS
-------------------------------------------------
-
-
-task.spawn(function()
-
-
-	while true do
-
-
-		if fps >= 50 then
-
-
-			statsStroke.Color =
-			Color3.fromRGB(0,255,100)
-
-
-
-		elseif fps >= 30 then
-
-
-			statsStroke.Color =
-			Color3.fromRGB(255,220,0)
-
-
-
-		else
-
-
-			statsStroke.Color =
-			Color3.fromRGB(255,50,50)
-
-
-
-		end
-
-
-
-		task.wait(2)
-
-
-	end
-
-
-end)
-
-
-
-
-
-
-------------------------------------------------
--- NEON ANIMATION
-------------------------------------------------
-
-
-local statGradient =
-Instance.new("UIGradient")
-
-
-
-statGradient.Color =
-ColorSequence.new({
-
-	ColorSequenceKeypoint.new(
-		0,
-		Color3.fromRGB(0,255,255)
-	),
-
-
-	ColorSequenceKeypoint.new(
-		0.5,
-		Color3.fromRGB(0,80,255)
-	),
-
-
-	ColorSequenceKeypoint.new(
-		1,
-		Color3.fromRGB(0,255,255)
-	)
-
-})
-
-
-
-statGradient.Parent =
-statsStroke
-
-
-
-
-
-task.spawn(function()
-
-
-	while true do
-
-
-		for i=-1,1,.03 do
-
-
-			statGradient.Offset =
-			Vector2.new(i,0)
-
-
-			task.wait(.03)
-
-
-		end
-
-
-	end
-
-
-end)
-
-
-
-
-
-print("⭐ Premium Player Panel V5 Bölüm 3 Aktif")
-------------------------------------------------
--- PREMIUM PLAYER PANEL V5
--- BÖLÜM 4 / 5
--- COMBAT & BADGE SYSTEM
-------------------------------------------------
-
-
-------------------------------------------------
--- COMBAT VALUES
-------------------------------------------------
-
-
-local kills = 0
-local deaths = 0
-local killStreak = 0
-
-
-
-
-
-
-------------------------------------------------
--- CHARACTER DEATH TRACKER
-------------------------------------------------
-
-
-local function setupCharacter(character)
-
-
-	local humanoid =
-	character:WaitForChild("Humanoid")
-
-
-
-	humanoid.Died:Connect(function()
-
-
-		deaths += 1
-
-		killStreak = 0
-
-
-	end)
-
-
+local function disableFly()
+    flyActive = false
+    if flyConn then flyConn:Disconnect(); flyConn=nil end
+    if flyBV and flyBV.Parent then flyBV:Destroy() end
+    if flyBG and flyBG.Parent then flyBG:Destroy() end
+    flyBV=nil; flyBG=nil
+    if hum then
+        hum.PlatformStand = false
+    end
+    nfy("FLY","Uçuş devre dışı",2)
+    alog("FLY KAPALI",C().sub)
 end
 
-
-
-
-if player.Character then
-
-	setupCharacter(player.Character)
-
+-- ══════════════════════════════════════════════
+--  ESP SİSTEMİ (DÜZELTİLDİ)
+-- ══════════════════════════════════════════════
+local function clearESP()
+    for _,bb in pairs(espBillboards) do
+        pcall(function() bb:Destroy() end)
+    end
+    espBillboards={}
 end
 
-
-
-player.CharacterAdded:Connect(
-	setupCharacter
-)
-
-
-
-
-
-
-
-------------------------------------------------
--- COMBAT CARD
-------------------------------------------------
-
-
-local combatCard =
-Instance.new("Frame")
-
-
-
-combatCard.Name =
-"CombatCard"
-
-
-
-combatCard.Size =
-UDim2.fromOffset(800,220)
-
-
-
-combatCard.Position =
-UDim2.fromOffset(40,800)
-
-
-
-combatCard.BackgroundColor3 =
-Color3.fromRGB(0,0,0)
-
-
-
-combatCard.BackgroundTransparency =
-0.35
-
-
-
-combatCard.Parent =
-scroll
-
-
-
-
-
-
-local combatCorner =
-Instance.new("UICorner")
-
-
-
-combatCorner.CornerRadius =
-UDim.new(0,30)
-
-
-
-combatCorner.Parent =
-combatCard
-
-
-
-
-
-local combatStroke =
-Instance.new("UIStroke")
-
-
-
-combatStroke.Color =
-Color3.fromRGB(255,80,80)
-
-
-
-combatStroke.Thickness = 4
-
-
-
-combatStroke.Parent =
-combatCard
-
-
-
-
-
-
-------------------------------------------------
--- TITLE
-------------------------------------------------
-
-
-local combatTitle =
-Instance.new("TextLabel")
-
-
-
-combatTitle.Size =
-UDim2.new(
-	1,
-	0,
-	0,
-	55
-)
-
-
-
-combatTitle.BackgroundTransparency = 1
-
-
-
-combatTitle.Text =
-"⚔️ COMBAT STATISTICS"
-
-
-
-combatTitle.TextScaled = true
-
-
-
-combatTitle.Font =
-Enum.Font.GothamBlack
-
-
-
-combatTitle.TextColor3 =
-Color3.fromRGB(255,100,100)
-
-
-
-combatTitle.Parent =
-combatCard
-
-
-
-
-
-
-
-------------------------------------------------
--- COMBAT TEXT
-------------------------------------------------
-
-
-local combatText =
-Instance.new("TextLabel")
-
-
-
-combatText.Size =
-UDim2.new(
-	1,
-	-50,
-	0,
-	130
-)
-
-
-
-combatText.Position =
-UDim2.fromOffset(
-	25,
-	70
-)
-
-
-
-combatText.BackgroundTransparency = 1
-
-
-
-combatText.TextScaled = true
-
-
-
-combatText.Font =
-Enum.Font.GothamBold
-
-
-
-combatText.TextColor3 =
-Color3.fromRGB(255,255,255)
-
-
-
-combatText.Parent =
-combatCard
-
-
-
-
-
-
-local function updateCombat()
-
-
-	local kd = 0
-
-
-
-	if deaths > 0 then
-
-
-		kd =
-		math.floor(
-			(kills/deaths)*100
-		)/100
-
-
-
-	else
-
-
-		kd = kills
-
-
-
-	end
-
-
-
-
-
-	combatText.Text =
-
-
-	"⚔️ Kills : "..kills
-
-
-	..
-
-	"\n☠️ Deaths : "..deaths
-
-
-	..
-
-	"\n📊 K/D : "..kd
-
-
-	..
-
-	"\n🔥 Kill Streak : "..killStreak
-
-
-
+local function createESP(plr)
+    if espBillboards[plr] then return end
+    if not plr.Character then return end
+    local hrp = plr.Character:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+
+    local bb = Instance.new("BillboardGui")
+    bb.Name = "PhantomESP"
+    bb.Size = UDim2.new(0,120,0,60)
+    bb.StudsOffset = Vector3.new(0,3,0)
+    bb.AlwaysOnTop = true
+    bb.MaxDistance = CFG.range
+    bb.Adornee = hrp
+    bb.Parent = hrp
+
+    local nameL = Instance.new("TextLabel",bb)
+    nameL.Size = UDim2.new(1,0,0.5,0)
+    nameL.BackgroundTransparency = 1
+    nameL.TextColor3 = Color3.fromRGB(255,50,50)
+    nameL.TextSize = 14
+    nameL.Font = Enum.Font.GothamBold
+    nameL.Text = "["..plr.Name.."]"
+    nameL.TextStrokeTransparency = 0
+    nameL.TextStrokeColor3 = Color3.new(0,0,0)
+
+    local infoL = Instance.new("TextLabel",bb)
+    infoL.Size = UDim2.new(1,0,0.5,0)
+    infoL.Position = UDim2.new(0,0,0.5,0)
+    infoL.BackgroundTransparency = 1
+    infoL.TextColor3 = Color3.fromRGB(255,200,0)
+    infoL.TextSize = 11
+    infoL.Font = Enum.Font.Code
+    infoL.TextStrokeTransparency = 0
+    infoL.TextStrokeColor3 = Color3.new(0,0,0)
+
+    espBillboards[plr] = {bb=bb, info=infoL}
+
+    -- Oyuncu ayrılırsa temizle
+    plr.CharacterRemoving:Connect(function()
+        if espBillboards[plr] then
+            pcall(function() espBillboards[plr].bb:Destroy() end)
+            espBillboards[plr]=nil
+        end
+    end)
 end
 
-
-
-
-
-
-task.spawn(function()
-
-
-	while true do
-
-
-		updateCombat()
-
-
-		task.wait(1)
-
-
-	end
-
-
-end)
-
-
-
-
-
-
-
-------------------------------------------------
--- PREMIUM BADGE CARD
-------------------------------------------------
-
-
-local badgeCard =
-Instance.new("Frame")
-
-
-
-badgeCard.Name =
-"BadgeCard"
-
-
-
-badgeCard.Size =
-UDim2.fromOffset(800,180)
-
-
-
-badgeCard.Position =
-UDim2.fromOffset(40,1050)
-
-
-
-badgeCard.BackgroundColor3 =
-Color3.fromRGB(0,0,0)
-
-
-
-badgeCard.BackgroundTransparency =
-0.35
-
-
-
-badgeCard.Parent =
-scroll
-
-
-
-
-
-local badgeCorner =
-Instance.new("UICorner")
-
-
-
-badgeCorner.CornerRadius =
-UDim.new(0,30)
-
-
-
-badgeCorner.Parent =
-badgeCard
-
-
-
-
-
-
-local badgeStroke =
-Instance.new("UIStroke")
-
-
-
-badgeStroke.Color =
-Color3.fromRGB(255,215,0)
-
-
-
-badgeStroke.Thickness = 4
-
-
-
-badgeStroke.Parent =
-badgeCard
-
-
-
-
-
-
-------------------------------------------------
--- BADGE TEXT
-------------------------------------------------
-
-
-local badgeText =
-Instance.new("TextLabel")
-
-
-
-badgeText.Size =
-UDim2.new(
-	1,
-	-40,
-	1,
-	-40
-)
-
-
-
-badgeText.Position =
-UDim2.fromOffset(
-	20,
-	20
-)
-
-
-
-badgeText.BackgroundTransparency = 1
-
-
-
-badgeText.TextWrapped = true
-
-
-
-badgeText.TextScaled = true
-
-
-
-badgeText.Font =
-Enum.Font.GothamBlack
-
-
-
-badgeText.TextColor3 =
-Color3.fromRGB(255,215,0)
-
-
-
-badgeText.Text =
-
-"🏆 PLAYER BADGES\n\n💎 Premium Member\n⭐ Elite Player"
-
-
-
-badgeText.Parent =
-badgeCard
-
-
-
-
-
-
-------------------------------------------------
--- PREMIUM STATUS
-------------------------------------------------
-
-
-local premiumText =
-Instance.new("TextLabel")
-
-
-
-premiumText.Size =
-UDim2.fromOffset(
-	600,
-	60
-)
-
-
-
-premiumText.Position =
-UDim2.fromOffset(
-	140,
-	1270
-)
-
-
-
-premiumText.BackgroundTransparency = 1
-
-
-
-premiumText.Text =
-"💎 PREMIUM STATUS : ACTIVE"
-
-
-
-premiumText.TextScaled = true
-
-
-
-premiumText.Font =
-Enum.Font.GothamBlack
-
-
-
-premiumText.TextColor3 =
-Color3.fromRGB(0,255,255)
-
-
-
-premiumText.Parent =
-scroll
-
-
-
-
-
-
-------------------------------------------------
--- COMBAT NEON EFFECT
-------------------------------------------------
-
-
-task.spawn(function()
-
-
-	while true do
-
-
-		TweenService:Create(
-
-			combatStroke,
-
-			TweenInfo.new(1),
-
-			{
-				Color =
-				Color3.fromRGB(255,0,120)
-			}
-
-		):Play()
-
-
-
-		task.wait(1)
-
-
-
-		TweenService:Create(
-
-			combatStroke,
-
-			TweenInfo.new(1),
-
-			{
-				Color =
-				Color3.fromRGB(255,150,0)
-			}
-
-		):Play()
-
-
-
-		task.wait(1)
-
-
-	end
-
-
-end)
-
-
-
-
-
-
-
-------------------------------------------------
--- BADGE SHINE
-------------------------------------------------
-
-
-local badgeGradient =
-Instance.new("UIGradient")
-
-
-
-badgeGradient.Color =
-ColorSequence.new({
-
-	ColorSequenceKeypoint.new(
-		0,
-		Color3.fromRGB(255,255,255)
-	),
-
-
-	ColorSequenceKeypoint.new(
-		0.5,
-		Color3.fromRGB(255,215,0)
-	),
-
-
-	ColorSequenceKeypoint.new(
-		1,
-		Color3.fromRGB(255,255,255)
-	)
-
-})
-
-
-
-badgeGradient.Parent =
-badgeStroke
-
-
-
-
-
-
-task.spawn(function()
-
-
-	while true do
-
-
-		for i=-1,1,.03 do
-
-
-			badgeGradient.Offset =
-			Vector2.new(i,0)
-
-
-			task.wait(.03)
-
-
-		end
-
-
-	end
-
-
-end)
-
-
-
-
-
-print("⭐ Premium Player Panel V5 Bölüm 4 Aktif")
-------------------------------------------------
--- PREMIUM PLAYER PANEL V5
--- BÖLÜM 5 / 5
--- FINAL RANK & XP SYSTEM
-------------------------------------------------
-
-
-------------------------------------------------
--- PLAYER PROGRESSION
-------------------------------------------------
-
-
-local level = 1
-
-local xp = 0
-
-local coins = 2500
-
-
-
-local function addXP(amount)
-
-
-	xp += amount
-
-
-
-	if xp >= 100 then
-
-
-		level += 1
-
-
-		xp -= 100
-
-
-	end
-
-
+local function updateESP()
+    if not CFG.esp then clearESP(); return end
+    for _,plr in ipairs(Plrs:GetPlayers()) do
+        if plr~=me then
+            createESP(plr)
+            -- HP güncelle
+            if espBillboards[plr] and plr.Character then
+                local h=plr.Character:FindFirstChild("Humanoid")
+                if h and espBillboards[plr].info then
+                    local hp=math.floor((h.Health/math.max(h.MaxHealth,1))*100)
+                    local dist=0
+                    if root and plr.Character:FindFirstChild("HumanoidRootPart") then
+                        dist=math.floor((root.Position-plr.Character.HumanoidRootPart.Position).Magnitude)
+                    end
+                    espBillboards[plr].info.Text = "HP:"..hp.."% | "..dist.."m"
+                end
+            end
+        end
+    end
 end
 
-
-
-
-
-
-------------------------------------------------
--- LEVEL CARD
-------------------------------------------------
-
-
-local levelCard =
-Instance.new("Frame")
-
-
-
-levelCard.Name =
-"LevelCard"
-
-
-
-levelCard.Size =
-UDim2.fromOffset(800,230)
-
-
-
-levelCard.Position =
-UDim2.fromOffset(40,1370)
-
-
-
-levelCard.BackgroundColor3 =
-Color3.fromRGB(0,0,0)
-
-
-
-levelCard.BackgroundTransparency =
-0.35
-
-
-
-levelCard.Parent =
-scroll
-
-
-
-
-
-
-local levelCorner =
-Instance.new("UICorner")
-
-
-
-levelCorner.CornerRadius =
-UDim.new(0,30)
-
-
-
-levelCorner.Parent =
-levelCard
-
-
-
-
-
-
-local levelStroke =
-Instance.new("UIStroke")
-
-
-
-levelStroke.Color =
-Color3.fromRGB(180,0,255)
-
-
-
-levelStroke.Thickness = 5
-
-
-
-levelStroke.Parent =
-levelCard
-
-
-
-
-
-
-------------------------------------------------
--- TITLE
-------------------------------------------------
-
-
-local levelTitle =
-Instance.new("TextLabel")
-
-
-
-levelTitle.Size =
-UDim2.new(
-	1,
-	0,
-	0,
-	55
-)
-
-
-
-levelTitle.BackgroundTransparency = 1
-
-
-
-levelTitle.Text =
-"🌟 PLAYER PROGRESSION"
-
-
-
-levelTitle.TextScaled = true
-
-
-
-levelTitle.Font =
-Enum.Font.GothamBlack
-
-
-
-levelTitle.TextColor3 =
-Color3.fromRGB(200,100,255)
-
-
-
-levelTitle.Parent =
-levelCard
-
-
-
-
-
-
-
-------------------------------------------------
--- LEVEL TEXT
-------------------------------------------------
-
-
-local levelText =
-Instance.new("TextLabel")
-
-
-
-levelText.Size =
-UDim2.new(
-	1,
-	-50,
-	0,
-	130
-)
-
-
-
-levelText.Position =
-UDim2.fromOffset(
-	25,
-	75
-)
-
-
-
-levelText.BackgroundTransparency = 1
-
-
-
-levelText.TextScaled = true
-
-
-
-levelText.Font =
-Enum.Font.GothamBold
-
-
-
-levelText.TextColor3 =
-Color3.fromRGB(255,255,255)
-
-
-
-levelText.Parent =
-levelCard
-
-
-
-
-
-
-local function updateLevel()
-
-
-	levelText.Text =
-
-
-	"🏅 Level : "..level
-
-
-	..
-
-	"\n⭐ XP : "..xp.."/100"
-
-
-	..
-
-	"\n💰 Coins : "..coins
-
-
-
+-- ══════════════════════════════════════════════
+--  WAYPOINT SİSTEMİ (DÜZELTİLDİ)
+-- ══════════════════════════════════════════════
+local wpParts = {}
+
+local function addWaypoint(pos)
+    wpCount = wpCount + 1
+    table.insert(wps, pos)
+
+    -- Görsel waypoint işaretçisi
+    local part = Instance.new("Part")
+    part.Size = Vector3.new(2,0.2,2)
+    part.Position = pos + Vector3.new(0,0.5,0)
+    part.Anchored = true
+    part.CanCollide = false
+    part.BrickColor = BrickColor.new("Bright yellow")
+    part.Material = Enum.Material.Neon
+    part.CastShadow = false
+    part.Parent = workspace
+
+    local sel = Instance.new("SelectionBox")
+    sel.Color3 = Color3.fromRGB(255,178,0)
+    sel.Adornee = part
+    sel.Parent = part
+
+    local numBB = Instance.new("BillboardGui")
+    numBB.Size = UDim2.new(0,40,0,20)
+    numBB.StudsOffset = Vector3.new(0,3,0)
+    numBB.Adornee = part
+    numBB.AlwaysOnTop = true
+    numBB.Parent = part
+
+    local numL = Instance.new("TextLabel",numBB)
+    numL.Size = UDim2.new(1,0,1,0)
+    numL.BackgroundTransparency = 1
+    numL.TextColor3 = Color3.fromRGB(255,178,0)
+    numL.TextSize = 14
+    numL.Font = Enum.Font.GothamBold
+    numL.Text = "WP"..wpCount
+    numL.TextStrokeTransparency = 0
+
+    table.insert(wpParts, part)
+    lastWpPos = pos
+    alog("WP"..wpCount.." eklendi",C().p1)
+    nfy("WAYPOINT","WP"..wpCount.." eklendi",2)
 end
 
-
-
-
-
-task.spawn(function()
-
-
-	while true do
-
-
-		updateLevel()
-
-
-		task.wait(1)
-
-
-	end
-
-
-end)
-
-
-
-
-
-
-
-------------------------------------------------
--- RANK SYSTEM
-------------------------------------------------
-
-
-local rankText =
-Instance.new("TextLabel")
-
-
-
-rankText.Size =
-UDim2.fromOffset(
-	800,
-	60
-)
-
-
-
-rankText.Position =
-UDim2.fromOffset(
-	40,
-	1620
-)
-
-
-
-rankText.BackgroundTransparency = 1
-
-
-
-rankText.TextScaled = true
-
-
-
-rankText.Font =
-Enum.Font.GothamBlack
-
-
-
-rankText.TextColor3 =
-Color3.fromRGB(255,215,0)
-
-
-
-rankText.Parent =
-scroll
-
-
-
-
-
-
-local function updateRank()
-
-
-	local rank =
-	"🥉 Bronze"
-
-
-
-	if level >= 10 then
-
-
-		rank =
-		"🥈 Silver"
-
-
-	end
-
-
-
-	if level >= 25 then
-
-
-		rank =
-		"🥇 Gold"
-
-
-	end
-
-
-
-	if level >= 50 then
-
-
-		rank =
-		"💎 Diamond"
-
-
-	end
-
-
-
-	if level >= 100 then
-
-
-		rank =
-		"👑 Legend"
-
-
-	end
-
-
-
-
-
-	rankText.Text =
-	"RANK : "..rank
-
-
+local wpMarchIdx = 1
+local wpMarching = false
+local wpMarchConn = nil
+
+local function startMarch()
+    if #wps == 0 then alog("Waypoint yok!",C().red); return end
+    CFG.march = true
+    wpMarchIdx = 1
+    wpMarching = true
+    alog("MARCH BASLADI",C().grn)
+    nfy("MARCH","Hareket başlıyor",2)
+
+    if wpMarchConn then wpMarchConn:Disconnect() end
+
+    wpMarchConn = Run.Heartbeat:Connect(function()
+        if not CFG.march or not hum or not root then return end
+        if wpMarchIdx > #wps then
+            if CFG.autoWp then
+                wpMarchIdx = 1
+            else
+                CFG.march = false
+                wpMarching = false
+                alog("MARCH TAMAMLANDI",C().p1)
+                return
+            end
+        end
+
+        local targetPos = wps[wpMarchIdx]
+        local dist = (root.Position - targetPos).Magnitude
+
+        if dist < CFG.followDst then
+            wpMarchIdx = wpMarchIdx + 1
+        else
+            hum:MoveTo(targetPos)
+        end
+    end)
 end
 
+local function stopMarch()
+    CFG.march = false
+    wpMarching = false
+    if wpMarchConn then wpMarchConn:Disconnect(); wpMarchConn=nil end
+    if hum then hum:MoveTo(root.Position) end
+    alog("MARCH DURDURULDU",C().sub)
+end
 
+local function clearWaypoints()
+    stopMarch()
+    wps={}; wpCount=0; lastWpPos=nil
+    for _,p in ipairs(wpParts) do
+        pcall(function() p:Destroy() end)
+    end
+    wpParts={}
+    wpMarchIdx=1
+    alog("WP TEMIZLENDI",C().sub)
+end
 
+-- ══════════════════════════════════════════════
+--  TAKİP SİSTEMİ (DÜZELTİLDİ)
+-- ══════════════════════════════════════════════
+local followConn = nil
 
+local function startFollow(plr)
+    if followConn then followConn:Disconnect() end
+    target = plr
+    following = true
+    alog("TAKİP: "..plr.Name,C().p1)
+    nfy("TAKİP",plr.Name.." takip ediliyor",2)
 
-task.spawn(function()
+    followConn = Run.Heartbeat:Connect(function()
+        if not following or not target or not hum or not root then return end
+        local tc = target.Character
+        if not tc then return end
+        local tr = tc:FindFirstChild("HumanoidRootPart")
+        if not tr then return end
+        local d = (root.Position - tr.Position).Magnitude
+        if d > CFG.followDst then
+            hum:MoveTo(tr.Position)
+        end
+    end)
+end
 
+local function stopFollow()
+    following = false
+    if followConn then followConn:Disconnect(); followConn=nil end
+    target = nil
+    alog("TAKİP DURDURULDU",C().sub)
+end
 
-	while true do
+-- ══════════════════════════════════════════════
+--  LIGHTING EFEKTLERİ (NV)
+-- ══════════════════════════════════════════════
+local nvCC=Instance.new("ColorCorrectionEffect",Lighting)
+nvCC.Enabled=false; nvCC.TintColor=Color3.fromRGB(0,255,80)
+nvCC.Contrast=0.4; nvCC.Saturation=-0.85; nvCC.Brightness=0.08
 
+local nvBloom=Instance.new("BloomEffect",Lighting)
+nvBloom.Enabled=false; nvBloom.Intensity=0.6; nvBloom.Size=14; nvBloom.Threshold=0.8
 
-		updateRank()
+local nvAtmo = Lighting:FindFirstChild("Atmosphere") or Instance.new("Atmosphere",Lighting)
+local origAtmoColor
+pcall(function() origAtmoColor = nvAtmo.Color end)
 
+local function enableNV()
+    CFG.nv = true
+    nvCC.Enabled = true
+    nvBloom.Enabled = true
+    nvOv.Visible = true
+    -- Brightness arttır
+    local origBrightness = Lighting.Brightness
+    tw(Lighting,{Brightness=math.max(origBrightness,3)},0.5)
+    alog("NIGHT VISION AKTIF",Color3.fromRGB(0,255,80))
+    nfy("NV","Night Vision açık",2)
+end
 
-		task.wait(5)
+local function disableNV()
+    CFG.nv = false
+    nvCC.Enabled = false
+    nvBloom.Enabled = false
+    nvOv.Visible = false
+    alog("NIGHT VISION KAPALI",C().sub)
+end
 
+-- ══════════════════════════════════════════════
+--  SCREEN GUI
+-- ══════════════════════════════════════════════
+local sg=Instance.new("ScreenGui",me.PlayerGui)
+sg.Name="PhantomMK3"; sg.ResetOnSpawn=false; sg.DisplayOrder=9999
+sg.ZIndexBehavior=Enum.ZIndexBehavior.Sibling
+sg.IgnoreGuiInset = true
 
-	end
+-- NV Overlay (burada tanımla ki enableNV/disableNV kullanabilsin)
+local nvOv=Instance.new("Frame",sg)
+nvOv.Size=UDim2.new(1,0,1,0); nvOv.BackgroundColor3=Color3.fromRGB(0,18,0)
+nvOv.BackgroundTransparency=1; nvOv.ZIndex=200; nvOv.Visible=false; nvOv.BorderSizePixel=0
+local nvG=Instance.new("UIGradient",nvOv)
+nvG.Transparency=NumberSequence.new{
+    NumberSequenceKeypoint.new(0,0.97),
+    NumberSequenceKeypoint.new(0.5,0.92),
+    NumberSequenceKeypoint.new(1,0.97),
+}
+nvG.Rotation=90
 
+-- Scanline overlay
+local nvScan=Instance.new("Frame",nvOv)
+nvScan.Size=UDim2.new(1,0,1,0)
+nvScan.BackgroundTransparency=1
+nvScan.ZIndex=201
 
+-- Danger Alert Overlay
+local dangerOv=Instance.new("Frame",sg)
+dangerOv.Size=UDim2.new(1,0,1,0); dangerOv.BackgroundColor3=Color3.fromRGB(255,0,0)
+dangerOv.BackgroundTransparency=1; dangerOv.ZIndex=150; dangerOv.Visible=false; dangerOv.BorderSizePixel=0
+local dangerActive=false; local dangerT=0
+
+-- ══════════════════════════════════════════════
+--  PUSULA HUD
+-- ══════════════════════════════════════════════
+local compF=Instance.new("Frame",sg)
+compF.Size=UDim2.new(0,300,0,28); compF.Position=UDim2.new(0.5,-150,0,8)
+compF.BackgroundColor3=Color3.fromRGB(8,6,0); compF.BorderSizePixel=0; compF.ZIndex=100
+Instance.new("UICorner",compF).CornerRadius=UDim.new(0,4)
+local compStr=Instance.new("UIStroke",compF); compStr.Color=Color3.fromRGB(140,95,0)
+
+local compBar=Instance.new("Frame",compF)
+compBar.Size=UDim2.new(1,-10,0,14); compBar.Position=UDim2.new(0,5,0,7)
+compBar.BackgroundTransparency=1; compBar.ClipsDescendants=true
+
+local compassDirs={"N","NE","E","SE","S","SW","W","NW","N","NE","E","SE","S","SW","W","NW","N"}
+local compassLbls={}
+for i,d in ipairs(compassDirs) do
+    local l=Instance.new("TextLabel",compBar)
+    l.Size=UDim2.new(0,36,1,0); l.Position=UDim2.new(0,(i-1)*36-290,0,0)
+    l.BackgroundTransparency=1; l.Text=d; l.TextSize=10; l.Font=Enum.Font.Code
+    l.TextColor3=d=="N" and Color3.fromRGB(255,50,50) or Color3.fromRGB(160,118,40)
+    l.ZIndex=101; compassLbls[i]=l
+end
+
+local compCtr=Instance.new("Frame",compF)
+compCtr.Size=UDim2.new(0,2,0,20); compCtr.Position=UDim2.new(0.5,-1,0,4)
+compCtr.BackgroundColor3=Color3.fromRGB(255,178,0); compCtr.BorderSizePixel=0; compCtr.ZIndex=102
+
+-- ══════════════════════════════════════════════
+--  KOORDİNAT HUD
+-- ══════════════════════════════════════════════
+local coordF=Instance.new("Frame",sg)
+coordF.Size=UDim2.new(0,150,0,52); coordF.Position=UDim2.new(0,8,1,-62)
+coordF.BackgroundColor3=Color3.fromRGB(8,6,0); coordF.BackgroundTransparency=0.15
+coordF.BorderSizePixel=0; coordF.ZIndex=100
+Instance.new("UICorner",coordF).CornerRadius=UDim.new(0,3)
+Instance.new("UIStroke",coordF).Color=Color3.fromRGB(140,95,0)
+
+local function mkCL(txt,y)
+    local l=Instance.new("TextLabel",coordF)
+    l.Size=UDim2.new(1,-8,0,12); l.Position=UDim2.new(0,6,0,y)
+    l.BackgroundTransparency=1; l.Text=txt; l.TextSize=9; l.Font=Enum.Font.Code
+    l.TextColor3=Color3.fromRGB(255,178,0); l.TextXAlignment=Enum.TextXAlignment.Left; l.ZIndex=101
+    return l
+end
+local _cTitle=mkCL("// KONUM",3); _cTitle.TextSize=7; _cTitle.TextColor3=Color3.fromRGB(160,118,40)
+local coordXL=mkCL("X: ---",16)
+local coordYL=mkCL("Y: ---",28)
+local coordZL=mkCL("Z: ---",40)
+
+-- ══════════════════════════════════════════════
+--  GUI YARDIMCI FONKSİYONLARI
+-- ══════════════════════════════════════════════
+local BTN_H = isMobile and 36 or 24  -- Mobilde daha büyük butonlar
+
+local function fr(p,x,y,w,h,col,r)
+    local f=Instance.new("Frame",p)
+    f.Size=UDim2.new(0,w,0,h); f.Position=UDim2.new(0,x,0,y)
+    f.BackgroundColor3=col or C().card; f.BorderSizePixel=0
+    if r then Instance.new("UICorner",f).CornerRadius=UDim.new(0,r) end
+    return f
+end
+
+local function lb(p,txt,sz,col,fnt,xa,x,y,w,h)
+    local l=Instance.new("TextLabel",p)
+    l.Size=UDim2.new(0,w or 200,0,h or 16)
+    l.Position=UDim2.new(0,x or 8,0,y or 4)
+    l.BackgroundTransparency=1; l.Text=txt; l.TextSize=sz or 10
+    l.TextColor3=col or C().txt; l.Font=fnt or Enum.Font.Code
+    l.TextXAlignment=xa or Enum.TextXAlignment.Left
+    l.TextWrapped=true; return l
+end
+
+local function sep(p,y)
+    local f=Instance.new("Frame",p)
+    f.Size=UDim2.new(1,-16,0,1); f.Position=UDim2.new(0,8,0,y)
+    f.BackgroundColor3=C().dim; f.BorderSizePixel=0
+    local g=Instance.new("UIGradient",f)
+    g.Transparency=NumberSequence.new{
+        NumberSequenceKeypoint.new(0,1),
+        NumberSequenceKeypoint.new(0.5,0.6),
+        NumberSequenceKeypoint.new(1,1),
+    }
+end
+
+local function btn(p,txt,x,y,w,h,bg)
+    local bh = h or BTN_H
+    local b=Instance.new("TextButton",p)
+    b.Size=UDim2.new(0,w,0,bh); b.Position=UDim2.new(0,x,0,y)
+    b.BackgroundColor3=bg or C().card; b.Text=txt
+    b.TextColor3=C().txt; b.TextSize=isMobile and 11 or 9; b.Font=Enum.Font.Code; b.BorderSizePixel=0
+    local s=Instance.new("UIStroke",b); s.Color=C().dim; s.Thickness=1; s.Transparency=0.5
+    Instance.new("UICorner",b).CornerRadius=UDim.new(0,3)
+    return b
+end
+
+local function togBtn(p,txt,x,y,w,onCol)
+    local b=btn(p,txt,x,y,w,BTN_H,C().bar)
+    local function upd(state)
+        b.BackgroundColor3=state and (onCol or C().grn) or C().bar
+        b.TextColor3=state and Color3.new(0,0,0) or C().txt
+    end
+    return b, upd
+end
+
+-- ══════════════════════════════════════════════
+--  ANA FRAME — MOBİL UYUMLU
+-- ══════════════════════════════════════════════
+local PANEL_W = isMobile and 360 or 480
+local PANEL_H = isMobile and 600 or 740
+
+local mn=Instance.new("Frame",sg)
+mn.Size=UDim2.new(0,PANEL_W,0,PANEL_H)
+mn.Position=UDim2.new(0.5,-PANEL_W/2,0.5,-PANEL_H/2)
+mn.BackgroundColor3=C().bg; mn.BorderSizePixel=0; mn.ClipsDescendants=true
+Instance.new("UICorner",mn).CornerRadius=UDim.new(0,6)
+local mnStr=Instance.new("UIStroke",mn); mnStr.Color=C().dim; mnStr.Thickness=1; mnStr.Transparency=0.3
+
+-- Scan line animasyonu
+local slF=Instance.new("Frame",mn)
+slF.Size=UDim2.new(1,0,0,1); slF.BackgroundColor3=C().p1; slF.BorderSizePixel=0
+slF.ZIndex=2
+local slG=Instance.new("UIGradient",slF)
+slG.Transparency=NumberSequence.new{
+    NumberSequenceKeypoint.new(0,1),NumberSequenceKeypoint.new(0.5,0.3),NumberSequenceKeypoint.new(1,1)}
+
+-- ── HEADER ────────────────────────────────────
+local hdr=Instance.new("Frame",mn)
+hdr.Size=UDim2.new(1,0,0,44); hdr.BackgroundColor3=C().card; hdr.BorderSizePixel=0; hdr.ZIndex=4
+local hdrBtm=Instance.new("Frame",hdr)
+hdrBtm.Size=UDim2.new(1,0,0,1); hdrBtm.Position=UDim2.new(0,0,1,-1)
+hdrBtm.BackgroundColor3=C().dim; hdrBtm.BorderSizePixel=0
+
+-- Logo
+local logoBx=Instance.new("Frame",hdr)
+logoBx.Size=UDim2.new(0,28,0,28); logoBx.Position=UDim2.new(0,8,0.5,-14)
+logoBx.BackgroundColor3=C().p1; logoBx.BorderSizePixel=0; logoBx.Rotation=45
+local logoL=Instance.new("TextLabel",logoBx)
+logoL.Size=UDim2.new(1,0,1,0); logoL.BackgroundTransparency=1; logoL.Text="◈"
+logoL.TextSize=12; logoL.Font=Enum.Font.GothamBold
+logoL.TextColor3=Color3.new(0,0,0); logoL.Rotation=-45
+
+local function hdrLb(t,s,col,x,y,w,h2)
+    local l=Instance.new("TextLabel",hdr)
+    l.Size=UDim2.new(0,w,0,h2); l.Position=UDim2.new(0,x,0,y)
+    l.BackgroundTransparency=1; l.Text=t; l.TextSize=s
+    l.TextColor3=col; l.Font=Enum.Font.Code
+    l.TextXAlignment=Enum.TextXAlignment.Left; l.ZIndex=5
+    return l
+end
+hdrLb("PHANTOM RECON MK3",11,C().txt,44,6,200,16)
+hdrLb("FULL MILITARY EDITION // v3.1",8,C().sub,44,24,240,12)
+
+-- Header butonları (kapat ve toggle)
+local function hdrBtn(txt,x,bg)
+    local b=Instance.new("TextButton",hdr)
+    b.Size=UDim2.new(0,30,0,28); b.Position=UDim2.new(1,x,0.5,-14)
+    b.BackgroundColor3=bg or C().card; b.Text=txt
+    b.TextColor3=C().txt; b.TextSize=10; b.Font=Enum.Font.Code; b.BorderSizePixel=0; b.ZIndex=6
+    Instance.new("UIStroke",b).Color=C().dim
+    Instance.new("UICorner",b).CornerRadius=UDim.new(0,4)
+    return b
+end
+
+local togSys=hdrBtn("ON",-72,C().grn)
+local minBtn=hdrBtn("─",-38)
+local closeBtn=hdrBtn("✕",-4,C().dimmer)
+closeBtn.TextColor3=C().red
+
+-- ── TEMA BAR ──────────────────────────────────
+local thBar=Instance.new("Frame",mn)
+thBar.Size=UDim2.new(1,0,0,24); thBar.Position=UDim2.new(0,0,0,44)
+thBar.BackgroundColor3=C().bar; thBar.BorderSizePixel=0
+
+local thBtns={}
+local thNames={"GHOST","STEEL","PHANTOM"}
+local thCols={Color3.fromRGB(255,178,0),Color3.fromRGB(0,180,255),Color3.fromRGB(0,255,65)}
+for i,tn in ipairs(thNames) do
+    local b=Instance.new("TextButton",thBar)
+    b.Size=UDim2.new(0,PANEL_W/3-4,0,20); b.Position=UDim2.new(0,(i-1)*(PANEL_W/3)+2,0.5,-10)
+    b.BackgroundColor3=tn==CFG.theme and thCols[i] or C().bar
+    b.Text=tn; b.TextSize=8; b.Font=Enum.Font.Code
+    b.TextColor3=tn==CFG.theme and Color3.new(0,0,0) or C().sub; b.BorderSizePixel=0
+    Instance.new("UICorner",b).CornerRadius=UDim.new(0,3)
+    thBtns[tn]=b
+    local capTn,capC=tn,thCols[i]
+    b.MouseButton1Click:Connect(function()
+        CFG.theme=capTn
+        for _,tb in pairs(thBtns) do tb.BackgroundColor3=C().bar; tb.TextColor3=C().sub end
+        b.BackgroundColor3=capC; b.TextColor3=Color3.new(0,0,0)
+        alog("Tema: "..capTn,C().p1)
+    end)
+end
+
+-- ── İÇERİK ALANI ──────────────────────────────
+local content=Instance.new("Frame",mn)
+content.Size=UDim2.new(1,0,1,-68); content.Position=UDim2.new(0,0,0,68)
+content.BackgroundTransparency=1; content.ClipsDescendants=true
+
+-- ══════════════════════════════════════════════
+--  MOBİL: TABBED LAYOUT / NORMAL: DUAL PANEL
+-- ══════════════════════════════════════════════
+
+-- Tab bar (sadece mobilde görünür)
+local currentTab = "RADAR"
+local tabBar=Instance.new("Frame",content)
+tabBar.Size=UDim2.new(1,0,0,30); tabBar.BackgroundColor3=C().card; tabBar.BorderSizePixel=0
+tabBar.Visible=isMobile
+
+local tabLabels={"RADAR","OPS","LOG"}
+local tabBtns={}
+for i,tn in ipairs(tabLabels) do
+    local b=Instance.new("TextButton",tabBar)
+    b.Size=UDim2.new(1/3,0,1,0); b.Position=UDim2.new((i-1)/3,0,0,0)
+    b.BackgroundColor3=i==1 and C().p1 or C().bar
+    b.Text=tn; b.TextSize=10; b.Font=Enum.Font.GothamBold
+    b.TextColor3=i==1 and Color3.new(0,0,0) or C().sub; b.BorderSizePixel=0
+    tabBtns[tn]=b
+end
+
+local tabContentOffset = isMobile and 30 or 0
+
+-- ══════════════════════════════════════════════
+--  SOL PANEL / TAB 1 (RADAR + AYARLAR)
+-- ══════════════════════════════════════════════
+local LP_W = isMobile and PANEL_W or 210
+local LP_H = isMobile and (PANEL_H-68-tabContentOffset) or (PANEL_H-68)
+
+local LP_scroll=Instance.new("ScrollingFrame",content)
+LP_scroll.Size=UDim2.new(0,LP_W,1,-tabContentOffset); LP_scroll.Position=UDim2.new(0,0,0,tabContentOffset)
+LP_scroll.BackgroundTransparency=1; LP_scroll.BorderSizePixel=0
+LP_scroll.ScrollBarThickness=isMobile and 4 or 2
+LP_scroll.ScrollBarImageColor3=C().dim
+LP_scroll.CanvasSize=UDim2.new(0,0,0,900)
+LP_scroll.AutomaticCanvasSize=Enum.AutomaticSize.Y
+LP_scroll.Visible=true
+
+local LP=Instance.new("Frame",LP_scroll)
+LP.Size=UDim2.new(1,0,0,900); LP.Position=UDim2.new(0,0,0,0)
+LP.BackgroundTransparency=1; LP.BorderSizePixel=0
+-- Divider (sadece desktop)
+if not isMobile then
+    local lpR=Instance.new("Frame",LP_scroll)
+    lpR.Size=UDim2.new(0,1,1,0); lpR.Position=UDim2.new(1,-1,0,0)
+    lpR.BackgroundColor3=C().dim; lpR.BorderSizePixel=0
+end
+
+-- RADAR BAŞLIK
+lb(LP,"// RADAR",8,C().sub,Enum.Font.Code,nil,8,4,120,12)
+
+-- Radar
+local RADAR_SIZE = isMobile and 180 or 200
+local RADAR_X = isMobile and math.floor((LP_W-RADAR_SIZE)/2) or 5
+local radarBg=fr(LP,RADAR_X,18,RADAR_SIZE,RADAR_SIZE,C().bar,RADAR_SIZE/2)
+Instance.new("UIStroke",radarBg).Color=C().dim
+
+local function mkRing(sz)
+    local rsz=math.floor(RADAR_SIZE*(sz/200))
+    local off=(RADAR_SIZE-rsz)/2
+    local r=fr(radarBg,off,off,rsz,rsz,Color3.new(0,0,0),rsz/2)
+    r.BackgroundTransparency=1
+    local rs2=Instance.new("UIStroke",r); rs2.Color=C().dim; rs2.Thickness=1; rs2.Transparency=0.7
+end
+mkRing(135); mkRing(67)
+
+local half=RADAR_SIZE/2
+local rCH1=fr(radarBg,half-1,0,2,RADAR_SIZE,C().dim,0); rCH1.BackgroundTransparency=0.85
+local rCH2=fr(radarBg,0,half-1,RADAR_SIZE,2,C().dim,0); rCH2.BackgroundTransparency=0.85
+
+local sweepLn=Instance.new("Frame",radarBg)
+sweepLn.Size=UDim2.new(0,2,0,half); sweepLn.Position=UDim2.new(0,half,0,half)
+sweepLn.AnchorPoint=Vector2.new(0.5,1); sweepLn.BackgroundColor3=C().p1; sweepLn.BorderSizePixel=0
+sweepLn.ZIndex=2
+Instance.new("UIGradient",sweepLn).Transparency=NumberSequence.new{
+    NumberSequenceKeypoint.new(0,0.2),NumberSequenceKeypoint.new(1,1)}
+
+local selfDot=fr(radarBg,half-4,half-4,8,8,C().p2,4)
+selfDot.ZIndex=5
+Instance.new("UIStroke",selfDot).Color=C().p2
+
+local radarBlips={}
+for i=1,16 do
+    local b=fr(radarBg,0,0,7,7,C().red,4)
+    b.Visible=false; b.ZIndex=4
+    radarBlips[i]=b
+end
+
+local lockRing=fr(radarBg,0,0,22,22,Color3.new(0,0,0),11)
+lockRing.BackgroundTransparency=1; lockRing.ZIndex=5; lockRing.Visible=false
+local lrStr=Instance.new("UIStroke",lockRing); lrStr.Color=C().p1; lrStr.Thickness=2
+
+local Y_OFF = RADAR_SIZE+24
+
+-- MENZIL
+lb(LP,"// RANGE",8,C().sub,Enum.Font.Code,nil,8,Y_OFF,80,12)
+local rangeTxt=lb(LP,"100m",9,C().p1,Enum.Font.Code,nil,LP_W-52,Y_OFF-1,44,14)
+local rMin=btn(LP,"−",8,Y_OFF+14,44,BTN_H,C().bar)
+local rPls=btn(LP,"+",56,Y_OFF+14,44,BTN_H,C().bar)
+rMin.MouseButton1Click:Connect(function() CFG.range=math.max(20,CFG.range-10); rangeTxt.Text=CFG.range.."m" end)
+rPls.MouseButton1Click:Connect(function() CFG.range=math.min(300,CFG.range+10); rangeTxt.Text=CFG.range.."m" end)
+
+Y_OFF = Y_OFF+14+BTN_H+8
+
+-- HIZ
+lb(LP,"// SPEED",8,C().sub,Enum.Font.Code,nil,8,Y_OFF,80,12)
+local speedTxt=lb(LP,"16",9,C().p1,Enum.Font.Code,nil,LP_W-52,Y_OFF-1,44,14)
+local sMinus=btn(LP,"−",8,Y_OFF+14,38,BTN_H,C().bar)
+local sPlus=btn(LP,"+",50,Y_OFF+14,38,BTN_H,C().bar)
+local sMax=btn(LP,"MAX",92,Y_OFF+14,54,BTN_H,C().bar)
+local sRst=btn(LP,"RST",150,Y_OFF+14,LP_W-158,BTN_H,C().bar)
+
+local function applySpeed() if hum then hum.WalkSpeed=CFG.speed end end
+sMinus.MouseButton1Click:Connect(function() CFG.speed=math.max(4,CFG.speed-2); speedTxt.Text=tostring(CFG.speed); applySpeed() end)
+sPlus.MouseButton1Click:Connect(function() CFG.speed=math.min(200,CFG.speed+2); speedTxt.Text=tostring(CFG.speed); applySpeed() end)
+sMax.MouseButton1Click:Connect(function() CFG.speed=200; speedTxt.Text="200"; applySpeed(); alog("MAX HIZ!",C().p1) end)
+sRst.MouseButton1Click:Connect(function() CFG.speed=16; speedTxt.Text="16"; applySpeed(); alog("HIZ SIFIR",C().sub) end)
+
+Y_OFF = Y_OFF+14+BTN_H+8
+
+-- TAKİP MESAFESİ
+lb(LP,"// FOLLOW DIST",8,C().sub,Enum.Font.Code,nil,8,Y_OFF,120,12)
+local distTxt=lb(LP,"6s",9,C().p1,Enum.Font.Code,nil,LP_W-52,Y_OFF-1,44,14)
+local dMin=btn(LP,"−",8,Y_OFF+14,44,BTN_H,C().bar)
+local dPls=btn(LP,"+",56,Y_OFF+14,44,BTN_H,C().bar)
+dMin.MouseButton1Click:Connect(function() CFG.followDst=math.max(2,CFG.followDst-1); distTxt.Text=CFG.followDst.."s" end)
+dPls.MouseButton1Click:Connect(function() CFG.followDst=math.min(30,CFG.followDst+1); distTxt.Text=CFG.followDst.."s" end)
+
+Y_OFF = Y_OFF+14+BTN_H+8
+sep(LP,Y_OFF); Y_OFF=Y_OFF+8
+
+-- KONTROLLER
+lb(LP,"// CONTROLS",8,C().sub,Enum.Font.Code,nil,8,Y_OFF,120,12); Y_OFF=Y_OFF+14
+local marchBtn=btn(LP,"▶ MARCH",8,Y_OFF,LP_W-16,BTN_H,C().bar); Y_OFF=Y_OFF+BTN_H+4
+local haltBtn=btn(LP,"■ HALT",8,Y_OFF,LP_W-16,BTN_H,C().bar); Y_OFF=Y_OFF+BTN_H+4
+local wpBtn=btn(LP,"📍 WAYPOINT",8,Y_OFF,(LP_W-20)/2,BTN_H,C().bar)
+local scanBtn=btn(LP,"🔍 SCAN",(LP_W-20)/2+12,Y_OFF,(LP_W-20)/2,BTN_H,C().bar)
+Y_OFF=Y_OFF+BTN_H+4
+local clearBtn=btn(LP,"🗑 CLEAR WPS",8,Y_OFF,LP_W-16,BTN_H,C().bar); Y_OFF=Y_OFF+BTN_H+8
+sep(LP,Y_OFF); Y_OFF=Y_OFF+8
+
+-- MILITARY OPS
+lb(LP,"// MILITARY OPS",8,C().sub,Enum.Font.Code,nil,8,Y_OFF,140,12); Y_OFF=Y_OFF+14
+local BW=(LP_W-20)/2
+local nvBtn,   nvUpd   = togBtn(LP,"NV",8,Y_OFF,BW,Color3.fromRGB(0,120,20))
+local espBtn,  espUpd  = togBtn(LP,"ESP",BW+12,Y_OFF,BW,Color3.fromRGB(0,80,180)); Y_OFF=Y_OFF+BTN_H+4
+local flyBtn,  flyUpd  = togBtn(LP,"FLY",8,Y_OFF,BW,Color3.fromRGB(0,80,180))
+local ijBtn,   ijUpd   = togBtn(LP,"INF JUMP",BW+12,Y_OFF,BW,Color3.fromRGB(100,0,180)); Y_OFF=Y_OFF+BTN_H+4
+local stBtn,   stUpd   = togBtn(LP,"STEALTH",8,Y_OFF,BW,Color3.fromRGB(20,60,100))
+local spBtn,   spUpd   = togBtn(LP,"AUTO SPRINT",BW+12,Y_OFF,BW,Color3.fromRGB(140,80,0)); Y_OFF=Y_OFF+BTN_H+8
+sep(LP,Y_OFF); Y_OFF=Y_OFF+8
+
+-- OYUNCU LİSTESİ
+lb(LP,"// YAKIN OYUNCULAR",8,C().sub,Enum.Font.Code,nil,8,Y_OFF,180,12); Y_OFF=Y_OFF+14
+
+local plrListFrame=fr(LP,8,Y_OFF,LP_W-16,120,C().bar,3)
+Y_OFF=Y_OFF+128
+
+local plrLabels={}
+for i=1,6 do
+    local l=lb(plrListFrame,"",9,C().sub,Enum.Font.Code,nil,4,(i-1)*19,LP_W-26,18)
+    plrLabels[i]=l
+end
+
+-- TAKİP BUTONU
+local followBtn=btn(LP,"🎯 TAKİP ET",8,Y_OFF,LP_W-16,BTN_H,C().bar); Y_OFF=Y_OFF+BTN_H+4
+local stopFollowBtn=btn(LP,"✋ TAKİBİ DURDUR",8,Y_OFF,LP_W-16,BTN_H,C().bar); Y_OFF=Y_OFF+BTN_H+8
+stopFollowBtn.TextColor3=C().red
+
+sep(LP,Y_OFF); Y_OFF=Y_OFF+8
+
+-- JJ SAYAÇ
+lb(LP,"// INF JUMP SAYACI",8,C().sub,Enum.Font.Code,nil,8,Y_OFF,180,12); Y_OFF=Y_OFF+14
+
+local jjBox=Instance.new("TextBox",LP)
+jjBox.Size=UDim2.new(0,LP_W-16,0,BTN_H); jjBox.Position=UDim2.new(0,8,0,Y_OFF)
+jjBox.BackgroundColor3=C().bar; jjBox.BorderSizePixel=0
+jjBox.Text="10"; jjBox.TextSize=14; jjBox.Font=Enum.Font.GothamBold
+jjBox.TextColor3=C().p1; jjBox.PlaceholderText="Kaç jump?"
+jjBox.TextXAlignment=Enum.TextXAlignment.Center; jjBox.ClearTextOnFocus=false
+Instance.new("UIStroke",jjBox).Color=C().p1
+Instance.new("UICorner",jjBox).CornerRadius=UDim.new(0,4)
+Y_OFF=Y_OFF+BTN_H+4
+
+local jjCntLbl=lb(LP,"0 / 0",11,C().dim,Enum.Font.GothamBold,Enum.TextXAlignment.Center,8,Y_OFF,LP_W-16,18)
+Y_OFF=Y_OFF+22
+
+local jjBg=fr(LP,8,Y_OFF,LP_W-16,5,C().dimmer,3); Y_OFF=Y_OFF+9
+local jjFill=fr(jjBg,0,0,0,5,C().p1,3)
+local jjStLbl=lb(LP,"BEKLIYOR",8,C().sub,Enum.Font.Code,Enum.TextXAlignment.Center,8,Y_OFF,LP_W-16,12); Y_OFF=Y_OFF+16
+
+local jjStartBtn=btn(LP,"► BASLAT",8,Y_OFF,(LP_W-20)/2,BTN_H,C().bar)
+local jjStopBtn=btn(LP,"■ DUR",(LP_W-20)/2+12,Y_OFF,(LP_W-20)/2,BTN_H,C().bar)
+jjStopBtn.TextColor3=C().red
+Y_OFF=Y_OFF+BTN_H+12
+
+-- Canvas boyutunu güncelle
+LP.Size=UDim2.new(1,0,0,Y_OFF)
+LP_scroll.CanvasSize=UDim2.new(0,0,0,Y_OFF)
+
+-- ══════════════════════════════════════════════
+--  SAĞ PANEL (sadece desktop) / TAB 2 (mobil)
+-- ══════════════════════════════════════════════
+local RP_W = isMobile and PANEL_W or 270
+local RP_X = isMobile and 0 or 210
+
+local RP_scroll=Instance.new("ScrollingFrame",content)
+RP_scroll.Size=UDim2.new(0,RP_W,1,-tabContentOffset)
+RP_scroll.Position=UDim2.new(0,RP_X,0,tabContentOffset)
+RP_scroll.BackgroundTransparency=1; RP_scroll.BorderSizePixel=0
+RP_scroll.ScrollBarThickness=isMobile and 4 or 2
+RP_scroll.ScrollBarImageColor3=C().dim
+RP_scroll.CanvasSize=UDim2.new(0,0,0,0)
+RP_scroll.AutomaticCanvasSize=Enum.AutomaticSize.Y
+RP_scroll.Visible=not isMobile  -- Desktop'ta her zaman görünür
+
+local RP=Instance.new("Frame",RP_scroll)
+RP.Size=UDim2.new(1,0,0,0); RP.AutomaticSize=Enum.AutomaticSize.Y
+RP.BackgroundTransparency=1; RP.BorderSizePixel=0
+
+local RPY=0
+
+-- TARGET LOCK
+local function rpLb(txt,y,col,sz) return lb(RP,txt,sz or 8,col or C().sub,Enum.Font.Code,nil,10,y,RP_W-20,14) end
+
+rpLb("// TARGET LOCK",RPY+4); RPY=RPY+18
+
+local lockBox=fr(RP,8,RPY,RP_W-16,120,C().card,3)
+local lbStr=Instance.new("UIStroke",lockBox); lbStr.Color=C().p1; lbStr.Thickness=1; lbStr.Transparency=0.5
+RPY=RPY+128
+
+lb(lockBox,"HEDEF:",8,C().sub,Enum.Font.Code,nil,8,4,120,12)
+local lockStatus=lb(lockBox,"TARANIYOR...",8,C().sub,Enum.Font.Code,Enum.TextXAlignment.Right,0,4,RP_W-26,12)
+local targetNameLbl=lb(lockBox,"---",14,C().dim,Enum.Font.Code,nil,8,18,RP_W-26,20)
+
+local function tRow(k,y)
+    lb(lockBox,k..":",8,C().sub,Enum.Font.Code,nil,8,y,80,13)
+    return lb(lockBox,"---",10,C().p1,Enum.Font.Code,Enum.TextXAlignment.Right,0,y,RP_W-26,13)
+end
+local tDist=tRow("DIST",42)
+local tBear=tRow("BEARING",58)
+local tHp=tRow("HP",74)
+local tThreat=tRow("THREAT",90)
+local tCoord=tRow("COORD",106)
+
+-- OYUNCU LİSTESİ (sağ panel)
+rpLb("// HEDEF SEÇ",RPY); RPY=RPY+18
+
+local tgtScroll=Instance.new("ScrollingFrame",RP)
+tgtScroll.Size=UDim2.new(1,-16,0,160); tgtScroll.Position=UDim2.new(0,8,0,RPY)
+tgtScroll.BackgroundColor3=C().bar; tgtScroll.BorderSizePixel=0
+tgtScroll.ScrollBarThickness=3; tgtScroll.CanvasSize=UDim2.new(0,0,0,0)
+tgtScroll.AutomaticCanvasSize=Enum.AutomaticSize.Y
+Instance.new("UICorner",tgtScroll).CornerRadius=UDim.new(0,3)
+RPY=RPY+168
+
+local tgtButtons={}
+local function refreshTargetList()
+    for _,b in ipairs(tgtButtons) do b:Destroy() end
+    tgtButtons={}
+    local yy=4
+    for _,plr in ipairs(Plrs:GetPlayers()) do
+        if plr~=me then
+            local b2=Instance.new("TextButton",tgtScroll)
+            b2.Size=UDim2.new(1,-8,0,BTN_H); b2.Position=UDim2.new(0,4,0,yy)
+            b2.BackgroundColor3=target==plr and C().p1 or C().card
+            b2.Text=(target==plr and "◉ " or "○ ")..plr.Name
+            b2.TextSize=10; b2.Font=Enum.Font.Code
+            b2.TextColor3=target==plr and Color3.new(0,0,0) or C().txt
+            b2.BorderSizePixel=0
+            Instance.new("UICorner",b2).CornerRadius=UDim.new(0,3)
+            b2.MouseButton1Click:Connect(function()
+                if target==plr then
+                    stopFollow()
+                    target=nil
+                    alog("Hedef kaldırıldı",C().sub)
+                else
+                    target=plr
+                    alog("Hedef: "..plr.Name,C().p1)
+                    nfy("HEDEF",plr.Name.." seçildi",2)
+                end
+                refreshTargetList()
+            end)
+            table.insert(tgtButtons,b2)
+            yy=yy+BTN_H+3
+        end
+    end
+end
+refreshTargetList()
+Plrs.PlayerAdded:Connect(function() task.wait(1); refreshTargetList() end)
+Plrs.PlayerRemoving:Connect(function(p)
+    task.wait(0.1)
+    if target==p then stopFollow(); target=nil end
+    refreshTargetList()
 end)
 
-
-
-
-
-
-
-------------------------------------------------
--- ACHIEVEMENT
-------------------------------------------------
-
-
-local achievement =
-Instance.new("TextLabel")
-
-
-
-achievement.Size =
-UDim2.fromOffset(
-	800,
-	80
-)
-
-
-
-achievement.Position =
-UDim2.fromOffset(
-	40,
-	1710
-)
-
-
-
-achievement.BackgroundTransparency = 1
-
-
-
-achievement.TextScaled = true
-
-
-
-achievement.Font =
-Enum.Font.GothamBlack
-
-
-
-achievement.TextColor3 =
-Color3.fromRGB(255,255,0)
-
-
-
-achievement.Text =
-
-"🏆 ACHIEVEMENT : PREMIUM PLAYER"
-
-
-
-achievement.Parent =
-scroll
-
-
-
-
-
-
-
-------------------------------------------------
--- UPDATE CANVAS SIZE
-------------------------------------------------
-
-
-scroll.CanvasSize =
-UDim2.new(
-	0,
-	0,
-	0,
-	1850
-)
-
-
-
-
-
-
-
-------------------------------------------------
--- FINAL GRADIENT
-------------------------------------------------
-
-
-local finalGradient =
-Instance.new("UIGradient")
-
-
-
-finalGradient.Color =
-ColorSequence.new({
-
-	ColorSequenceKeypoint.new(
-		0,
-		Color3.fromRGB(255,0,255)
-	),
-
-
-	ColorSequenceKeypoint.new(
-		0.5,
-		Color3.fromRGB(0,255,255)
-	),
-
-
-	ColorSequenceKeypoint.new(
-		1,
-		Color3.fromRGB(255,0,255)
-	)
-
-})
-
-
-
-finalGradient.Parent =
-levelStroke
-
-
-
-
-
-
-task.spawn(function()
-
-
-	while true do
-
-
-		for i=-1,1,.03 do
-
-
-			finalGradient.Offset =
-			Vector2.new(i,0)
-
-
-			task.wait(.03)
-
-
-		end
-
-
-	end
-
-
+-- LOG ALANI
+rpLb("// SYSTEM LOG",RPY); RPY=RPY+18
+
+local logScroll=Instance.new("ScrollingFrame",RP)
+logScroll.Size=UDim2.new(1,-16,0,180); logScroll.Position=UDim2.new(0,8,0,RPY)
+logScroll.BackgroundColor3=C().bar; logScroll.BorderSizePixel=0
+logScroll.ScrollBarThickness=3; logScroll.CanvasSize=UDim2.new(0,0,0,0)
+logScroll.AutomaticCanvasSize=Enum.AutomaticSize.Y
+Instance.new("UICorner",logScroll).CornerRadius=UDim.new(0,3)
+RPY=RPY+188
+
+local logLabels={}
+for i=1,15 do
+    local l=Instance.new("TextLabel",logScroll)
+    l.Size=UDim2.new(1,-8,0,14); l.Position=UDim2.new(0,4,0,(i-1)*15)
+    l.BackgroundTransparency=1; l.Text=""; l.TextSize=8
+    l.Font=Enum.Font.Code; l.TextColor3=C().sub
+    l.TextXAlignment=Enum.TextXAlignment.Left
+    logLabels[i]=l
+end
+
+-- Sistem bilgisi
+rpLb("// SİSTEM",RPY); RPY=RPY+18
+local sysBox=fr(RP,8,RPY,RP_W-16,60,C().bar,3); RPY=RPY+68
+local pingL=lb(sysBox,"PING: ---",8,C().sub,Enum.Font.Code,nil,8,4,RP_W-30,14)
+local fpsL=lb(sysBox,"FPS: ---",8,C().sub,Enum.Font.Code,nil,8,20,RP_W-30,14)
+local mobileL=lb(sysBox,"PLATFORM: "..(isMobile and "MOBILE" or "PC"),8,C().sub,Enum.Font.Code,nil,8,36,RP_W-30,14)
+
+RP.Size=UDim2.new(1,0,0,RPY+8)
+
+-- ══════════════════════════════════════════════
+--  MOBİL TAB MANTAĞI
+-- ══════════════════════════════════════════════
+if isMobile then
+    LP_scroll.Visible=true
+    RP_scroll.Visible=false
+
+    local function switchTab(name)
+        currentTab=name
+        for _,tn2 in ipairs(tabLabels) do
+            tabBtns[tn2].BackgroundColor3=C().bar
+            tabBtns[tn2].TextColor3=C().sub
+        end
+        tabBtns[name].BackgroundColor3=C().p1
+        tabBtns[name].TextColor3=Color3.new(0,0,0)
+
+        LP_scroll.Visible=false
+        RP_scroll.Visible=false
+
+        if name=="RADAR" then LP_scroll.Visible=true
+        elseif name=="OPS" then RP_scroll.Visible=true
+        elseif name=="LOG" then RP_scroll.Visible=true
+        end
+    end
+
+    for _,tn2 in ipairs(tabLabels) do
+        tabBtns[tn2].MouseButton1Click:Connect(function() switchTab(tn2) end)
+    end
+end
+
+-- ══════════════════════════════════════════════
+--  GUI SÜRÜKLEME (MOBİL UYUMLU)
+-- ══════════════════════════════════════════════
+do
+    local dragging=false
+    local dragStart=nil
+    local startPos=nil
+
+    local function onInput(input, gameProcessed)
+        if gameProcessed then return end
+        if input.UserInputType==Enum.UserInputType.MouseButton1
+        or input.UserInputType==Enum.UserInputType.Touch then
+            dragging=true
+            dragStart=input.Position
+            startPos=mn.Position
+        end
+    end
+
+    local function onMove(input)
+        if dragging and (input.UserInputType==Enum.UserInputType.MouseMovement
+                      or input.UserInputType==Enum.UserInputType.Touch) then
+            local delta=input.Position-dragStart
+            mn.Position=UDim2.new(
+                startPos.X.Scale,
+                startPos.X.Offset+delta.X,
+                startPos.Y.Scale,
+                startPos.Y.Offset+delta.Y
+            )
+        end
+    end
+
+    local function onEnd(input)
+        if input.UserInputType==Enum.UserInputType.MouseButton1
+        or input.UserInputType==Enum.UserInputType.Touch then
+            dragging=false
+        end
+    end
+
+    hdr.InputBegan:Connect(onInput)
+    UIS.InputChanged:Connect(onMove)
+    UIS.InputEnded:Connect(onEnd)
+end
+
+-- ══════════════════════════════════════════════
+--  BUTON BAĞLANTILARI
+-- ══════════════════════════════════════════════
+
+-- Kapat / Minimize (DÜZELTİLDİ)
+closeBtn.MouseButton1Click:Connect(function()
+    guiOpen=false
+    tw(mn,{BackgroundTransparency=1},0.2)
+    task.delay(0.25,function()
+        mn.Visible=false
+        -- Küçük aç butonu göster
+        local openBtn=Instance.new("TextButton",sg)
+        openBtn.Size=UDim2.new(0,80,0,30)
+        openBtn.Position=UDim2.new(0,8,0.5,-15)
+        openBtn.BackgroundColor3=C().p1
+        openBtn.Text="◈ RECON"
+        openBtn.TextSize=11; openBtn.Font=Enum.Font.GothamBold
+        openBtn.TextColor3=Color3.new(0,0,0); openBtn.BorderSizePixel=0
+        Instance.new("UICorner",openBtn).CornerRadius=UDim.new(0,4)
+        openBtn.MouseButton1Click:Connect(function()
+            openBtn:Destroy()
+            mn.Visible=true
+            mn.BackgroundTransparency=0
+            guiOpen=true
+        end)
+    end)
 end)
 
-
-
-
-
-
-
-------------------------------------------------
--- FINAL GLOW
-------------------------------------------------
-
-
-task.spawn(function()
-
-
-	while true do
-
-
-
-		TweenService:Create(
-
-			levelStroke,
-
-			TweenInfo.new(1),
-
-			{
-				Thickness = 8
-			}
-
-		):Play()
-
-
-
-		task.wait(1)
-
-
-
-		TweenService:Create(
-
-			levelStroke,
-
-			TweenInfo.new(1),
-
-			{
-				Thickness = 5
-			}
-
-		):Play()
-
-
-
-		task.wait(1)
-
-
-
-	end
-
-
+minBtn.MouseButton1Click:Connect(function()
+    minimized=not minimized
+    if minimized then
+        tw(content,{Size=UDim2.new(1,0,0,0)},0.2)
+        tw(mn,{Size=UDim2.new(0,PANEL_W,0,68)},0.2)
+        minBtn.Text="□"
+    else
+        tw(content,{Size=UDim2.new(1,0,1,-68)},0.2)
+        tw(mn,{Size=UDim2.new(0,PANEL_W,0,PANEL_H)},0.2)
+        minBtn.Text="─"
+    end
 end)
 
+-- Sistem toggle
+local sysEnabled=true
+togSys.MouseButton1Click:Connect(function()
+    sysEnabled=not sysEnabled
+    CFG.enabled=sysEnabled
+    togSys.Text=sysEnabled and "ON" or "OFF"
+    togSys.BackgroundColor3=sysEnabled and C().grn or C().red
+    alog(sysEnabled and "SİSTEM AKTİF" or "SİSTEM DEVRE DIŞI",sysEnabled and C().grn or C().red)
+end)
 
+-- March / Halt
+marchBtn.MouseButton1Click:Connect(function()
+    if root then
+        if #wps>0 then
+            startMarch()
+        else
+            addWaypoint(root.Position)
+            alog("WP eklendi, march başlıyor",C().p1)
+            startMarch()
+        end
+    end
+end)
 
+haltBtn.MouseButton1Click:Connect(function()
+    stopMarch()
+    stopFollow()
+end)
 
+-- Waypoint
+wpBtn.MouseButton1Click:Connect(function()
+    if root then
+        addWaypoint(root.Position)
+    end
+end)
 
+-- Scan
+scanBtn.MouseButton1Click:Connect(function()
+    scanNearby()
+    alog("TARAMA: "..#nearbyPlrs.." hedef",C().p1)
+    nfy("SCAN",#nearbyPlrs.." hedef bulundu",3)
+    refreshTargetList()
+end)
 
-------------------------------------------------
--- COMPLETE
-------------------------------------------------
+-- Clear WPs
+clearBtn.MouseButton1Click:Connect(function()
+    clearWaypoints()
+end)
 
+-- Night Vision (DÜZELTİLDİ)
+nvBtn.MouseButton1Click:Connect(function()
+    CFG.nv=not CFG.nv
+    nvUpd(CFG.nv)
+    if CFG.nv then enableNV() else disableNV() end
+end)
 
-print("⭐ Premium Player Panel V5 TÜM BÖLÜMLER AKTİF")
-print("💎 FINAL PREMIUM SYSTEM LOADED")
+-- ESP (DÜZELTİLDİ)
+espBtn.MouseButton1Click:Connect(function()
+    CFG.esp=not CFG.esp
+    espUpd(CFG.esp)
+    if not CFG.esp then clearESP() end
+    alog("ESP "..(CFG.esp and "AKTİF" or "KAPALI"),CFG.esp and C().p1 or C().sub)
+    nfy("ESP",CFG.esp and "Aktif" or "Kapalı",2)
+end)
 
+-- Fly (DÜZELTİLDİ)
+flyBtn.MouseButton1Click:Connect(function()
+    CFG.fly=not CFG.fly
+    flyUpd(CFG.fly)
+    if CFG.fly then enableFly() else disableFly() end
+end)
+
+-- Infinite Jump (DÜZELTİLDİ)
+ijBtn.MouseButton1Click:Connect(function()
+    CFG.infiniteJump=not CFG.infiniteJump
+    ijUpd(CFG.infiniteJump)
+    alog("INF JUMP "..(CFG.infiniteJump and "AKTİF" or "KAPALI"),CFG.infiniteJump and C().p1 or C().sub)
+    nfy("INF JUMP",CFG.infiniteJump and "Aktif" or "Kapalı",2)
+end)
+
+-- Stealth
+stBtn.MouseButton1Click:Connect(function()
+    CFG.stealth=not CFG.stealth
+    stUpd(CFG.stealth)
+    if char then
+        for _,p in ipairs(char:GetDescendants()) do
+            if p:IsA("BasePart") and p.Name~="HumanoidRootPart" then
+                p.Transparency=CFG.stealth and 0.75 or 0
+            end
+        end
+    end
+    alog("STEALTH "..(CFG.stealth and "AKTİF" or "KAPALI"),CFG.stealth and C().p1 or C().sub)
+    nfy("STEALTH",CFG.stealth and "Aktif" or "Kapalı",2)
+end)
+
+-- Auto Sprint
+spBtn.MouseButton1Click:Connect(function()
+    CFG.autoSprint=not CFG.autoSprint
+    spUpd(CFG.autoSprint)
+    alog("AUTO SPRINT "..(CFG.autoSprint and "AKTİF" or "KAPALI"),CFG.autoSprint and C().p1 or C().sub)
+end)
+
+-- Follow
+followBtn.MouseButton1Click:Connect(function()
+    if target then
+        startFollow(target)
+    else
+        alog("Önce hedef seç!",C().red)
+        nfy("HATA","Önce bir hedef seç",2)
+    end
+end)
+
+stopFollowBtn.MouseButton1Click:Connect(function()
+    stopFollow()
+end)
+
+-- JJ Sayaç
+jjStartBtn.MouseButton1Click:Connect(function()
+    local n=tonumber(jjBox.Text) or 0
+    if n<=0 then alog("Geçersiz sayı!",C().red); return end
+    jjTarget=n; jjCount=0; jjRunning=true
+    jjStLbl.Text="ÇALIŞIYOR..."; jjStLbl.TextColor3=C().grn
+    alog("JJ BASLADI: "..n,C().p1)
+    nfy("JJ",n.." jump başlıyor",2)
+end)
+
+jjStopBtn.MouseButton1Click:Connect(function()
+    jjRunning=false; jjCount=0; jjTarget=0
+    jjCntLbl.Text="0 / 0"; jjFill.Size=UDim2.new(0,0,1,1)
+    jjStLbl.Text="DURDURULDU"; jjStLbl.TextColor3=C().red
+    alog("JJ DURDURULDU",C().sub)
+end)
+
+-- ══════════════════════════════════════════════
+--  KLAVYE / TUŞLAR (DÜZELTİLDİ)
+-- ══════════════════════════════════════════════
+UIS.InputBegan:Connect(function(input, gpe)
+    if gpe then return end
+
+    if input.KeyCode==Enum.KeyCode.F1 then marchBtn.MouseButton1Click:Fire()
+    elseif input.KeyCode==Enum.KeyCode.F2 then haltBtn.MouseButton1Click:Fire()
+    elseif input.KeyCode==Enum.KeyCode.F3 then wpBtn.MouseButton1Click:Fire()
+    elseif input.KeyCode==Enum.KeyCode.F4 then scanBtn.MouseButton1Click:Fire()
+    elseif input.KeyCode==Enum.KeyCode.F5 then clearBtn.MouseButton1Click:Fire()
+    elseif input.KeyCode==Enum.KeyCode.F6 then nvBtn.MouseButton1Click:Fire()
+    elseif input.KeyCode==Enum.KeyCode.F7 then espBtn.MouseButton1Click:Fire()
+    elseif input.KeyCode==Enum.KeyCode.F8 then flyBtn.MouseButton1Click:Fire()
+    elseif input.KeyCode==Enum.KeyCode.F9 then ijBtn.MouseButton1Click:Fire()
+    elseif input.KeyCode==Enum.KeyCode.F10 then stBtn.MouseButton1Click:Fire()
+    elseif input.KeyCode==Enum.KeyCode.F11 then spBtn.MouseButton1Click:Fire()
+    end
+
+    -- Infinite Jump (DÜZELTİLDİ)
+    if CFG.infiniteJump and input.KeyCode==Enum.KeyCode.Space then
+        if hum and hum:GetState()==Enum.HumanoidStateType.Freefall then
+            hum:ChangeState(Enum.HumanoidStateType.Jumping)
+        end
+    end
+end)
+
+-- ══════════════════════════════════════════════
+--  FPS SAYACI
+-- ══════════════════════════════════════════════
+local fpsSamples={}
+local fpsSum=0
+local lastFpsTick=tick()
+
+-- ══════════════════════════════════════════════
+--  ANA DÖNGÜ (RunService - DÜZELTİLDİ)
+-- ══════════════════════════════════════════════
+local scanTimer=0
+local logTimer=0
+local slY=0
+local slDown=true
+local fpsTimer=0
+
+Run.Heartbeat:Connect(function(dt)
+    if not CFG.enabled then return end
+
+    scanTimer=scanTimer+dt
+    logTimer=logTimer+dt
+    fpsTimer=fpsTimer+dt
+    blink=math.floor(tick()*2)%2==0
+
+    -- FPS
+    fpsSum=fpsSum+dt
+    table.insert(fpsSamples,dt)
+    if #fpsSamples>30 then
+        fpsSum=fpsSum-table.remove(fpsSamples,1)
+    end
+
+    if fpsTimer>0.5 then
+        fpsTimer=0
+        local avgDt=fpsSum/math.max(#fpsSamples,1)
+        local fps=math.floor(1/math.max(avgDt,0.001))
+        if fpsL and fpsL.Parent then fpsL.Text="FPS: "..fps end
+
+        -- Ping (yaklaşık)
+        local ping=me:GetNetworkPing and math.floor(me:GetNetworkPing()*1000) or 0
+        if pingL and pingL.Parent then pingL.Text="PING: "..ping.."ms" end
+    end
+
+    -- Scan
+    if scanTimer>1 then
+        scanTimer=0
+        scanNearby()
+        updateESP()
+    end
+
+    -- Log güncelle
+    if logTimer>0.3 then
+        logTimer=0
+        for i,ll in ipairs(logLabels) do
+            if logLines[i] then
+                ll.Text=logLines[i].t
+                ll.TextColor3=logLines[i].c
+            else
+                ll.Text=""
+            end
+        end
+    end
+
+    -- Auto Sprint
+    if CFG.autoSprint and hum and hum.MoveDirection.Magnitude>0.1 then
+        hum.WalkSpeed=CFG.speed
+    end
+
+    -- Koordinat HUD
+    if root and coordXL and coordXL.Parent then
+        local p=root.Position
+        coordXL.Text=string.format("X: %.1f",p.X)
+        coordYL.Text=string.format("Y: %.1f",p.Y)
+        coordZL.Text=string.format("Z: %.1f",p.Z)
+    end
+
+    -- JJ Sayaç
+    if jjRunning then
+        jjTimer=jjTimer+dt
+        if jjTimer>0.35 then
+            jjTimer=0
+            if hum then
+                hum:ChangeState(Enum.HumanoidStateType.Jumping)
+                jjCount=jjCount+1
+                local pct=jjCount/math.max(jjTarget,1)
+                jjCntLbl.Text=jjCount.." / "..jjTarget
+                jjFill.Size=UDim2.new(pct,0,1,1)
+                jjStLbl.Text="JUMP "..jjCount.."/"..jjTarget
+            end
+            if jjCount>=jjTarget then
+                jjRunning=false
+                jjStLbl.Text="TAMAMLANDI ✓"
+                jjStLbl.TextColor3=C().p1
+                alog("JJ TAMAMLANDI: "..jjTarget,C().p1)
+                nfy("JJ","Tamamlandı!",2)
+            end
+        end
+    end
+end)
+
+Run.RenderStepped:Connect(function(dt)
+    if not CFG.enabled then return end
+
+    -- Scanline animasyonu
+    slY=slY+(slDown and 3 or -3)
+    if slY>=PANEL_H then slDown=false elseif slY<=0 then slDown=true end
+    if slF and slF.Parent then slF.Position=UDim2.new(0,0,0,slY) end
+
+    -- Pusula
+    if root then
+        local camY=Cam.CFrame.LookVector
+        local angle=math.deg(math.atan2(camY.X,camY.Z))
+        if angle<0 then angle=angle+360 end
+        local offset=-(angle/360)*(#compassDirs*36)
+        for i,l in ipairs(compassLbls) do
+            l.Position=UDim2.new(0,(i-1)*36+offset,0,0)
+        end
+    end
+
+    -- RADAR güncelle (DÜZELTİLDİ)
+    sweepAngle=sweepAngle+dt*90
+    if sweepAngle>=360 then sweepAngle=sweepAngle-360 end
+    if sweepLn and sweepLn.Parent then
+        sweepLn.Rotation=sweepAngle
+    end
+
+    if root then
+        for i,blip in ipairs(radarBlips) do
+            local nd=nearbyPlrs[i]
+            if nd then
+                local rel=nd.pos-root.Position
+                local camY2=Cam.CFrame.LookVector
+                local camAngle=math.atan2(camY2.X,camY2.Z)
+                local dx=rel.X*math.cos(-camAngle)-rel.Z*math.sin(-camAngle)
+                local dz=rel.X*math.sin(-camAngle)+rel.Z*math.cos(-camAngle)
+                local scale=RADAR_SIZE/2/CFG.range
+                local rx=math.clamp(dx*scale,-RADAR_SIZE/2+4,RADAR_SIZE/2-4)
+                local ry=math.clamp(dz*scale,-RADAR_SIZE/2+4,RADAR_SIZE/2-4)
+                blip.Position=UDim2.new(0,RADAR_SIZE/2+rx-4,0,RADAR_SIZE/2+ry-4)
+                blip.Visible=true
+                -- Tehdit rengi
+                local bc=nd.threat=="HIGH" and C().red or nd.threat=="MED" and Color3.fromRGB(255,165,0) or C().grn
+                blip.BackgroundColor3=bc
+                Instance.new("UICorner",blip).CornerRadius=UDim.new(1,0)
+
+                -- Hedef kilitli yüzük
+                if nd.plr==target then
+                    lockRing.Position=UDim2.new(0,RADAR_SIZE/2+rx-11,0,RADAR_SIZE/2+ry-11)
+                    lockRing.Visible=blink
+                end
+            else
+                blip.Visible=false
+            end
+        end
+
+        if target==nil then lockRing.Visible=false end
+    end
+
+    -- Target Lock güncelle
+    if target and target.Character then
+        local tr=target.Character:FindFirstChild("HumanoidRootPart")
+        local th=target.Character:FindFirstChild("Humanoid")
+        if tr and root then
+            local d=(root.Position-tr.Position).Magnitude
+            local hp2=th and math.floor((th.Health/math.max(th.MaxHealth,1))*100) or 0
+            targetNameLbl.Text=target.Name
+            targetNameLbl.TextColor3=C().p1
+            tDist.Text=math.floor(d).."m"
+            tBear.Text=getBearing(root.Position,tr.Position)
+            tHp.Text=hp2.."%"
+            tHp.TextColor3=hp2>60 and C().grn or hp2>30 and Color3.fromRGB(255,165,0) or C().red
+            tThreat.Text=d<30 and "⚠ HIGH" or d<60 and "MED" or "LOW"
+            tCoord.Text=string.format("%.0f,%.0f,%.0f",tr.Position.X,tr.Position.Y,tr.Position.Z)
+            lockStatus.Text="● KİLİTLİ"
+            lockStatus.TextColor3=blink and C().p1 or C().dim
+            lbStr.Color=blink and C().p1 or C().dim
+        end
+    else
+        targetNameLbl.Text="---"; targetNameLbl.TextColor3=C().dim
+        tDist.Text="---"; tBear.Text="---"; tHp.Text="---"; tThreat.Text="---"; tCoord.Text="---"
+        lockStatus.Text="TARANIO..."; lockStatus.TextColor3=C().sub
+        lbStr.Color=C().p1; lbStr.Transparency=0.5
+    end
+
+    -- Danger overlay
+    if #nearbyPlrs>0 and nearbyPlrs[1].threat=="HIGH" then
+        dangerOv.Visible=true
+        dangerT=dangerT+dt
+        dangerOv.BackgroundTransparency=0.85+math.sin(dangerT*6)*0.1
+    else
+        dangerOv.Visible=false
+        dangerT=0
+    end
+
+    -- Yakın oyuncu listesi (sol panel)
+    for i,ll in ipairs(plrLabels) do
+        local nd=nearbyPlrs[i]
+        if nd then
+            local icon=nd.threat=="HIGH" and "⚠" or nd.threat=="MED" and "◉" or "○"
+            ll.Text=icon.." "..nd.plr.Name.." | "..nd.dist.."m | HP:"..nd.hp.."%"
+            ll.TextColor3=nd.threat=="HIGH" and C().red or nd.threat=="MED" and Color3.fromRGB(255,165,0) or C().grn
+        else
+            ll.Text=""
+        end
+    end
+end)
+
+-- ══════════════════════════════════════════════
+--  KLAVYE KISA YOLU: RightShift = GUI Aç/Kapat
+-- ══════════════════════════════════════════════
+UIS.InputBegan:Connect(function(input, gpe)
+    if not gpe and input.KeyCode==Enum.KeyCode.RightShift then
+        mn.Visible=not mn.Visible
+    end
+end)
+
+-- Başlat bildirimi
+alog("PHANTOM MK3 AKTIF",C().p1)
+alog("Platform: "..(isMobile and "MOBİL" or "PC"),C().sub)
+nfy("PHANTOM MK3","Sistem aktif! Sürüm 3.1",4)
+print("[PHANTOM MK3] Baslatildi! RightShift = GUI aç/kapat")
